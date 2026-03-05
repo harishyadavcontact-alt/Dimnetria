@@ -1,0 +1,19 @@
+[project]
+name = "dimentria"
+version = "0.1.0"
+description = "MVP RRFI Engine and API for Dimentria"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn>=0.35.0",
+  "pydantic>=2.11.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "httpx>=0.28.0"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
