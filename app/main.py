@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
+from app.dashboard import dashboard_html
 from app.data import COUNTRIES
 from app.models import LayerMetadata, ScenarioRunRequest
 from app.scoring import rrfi_for_country, rrfi_world, run_dalio_scenario
@@ -18,6 +20,11 @@ LAYERS = [
 ]
 
 _SCENARIOS: dict[str, dict] = {}
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard() -> str:
+    return dashboard_html()
 
 
 @app.get("/health")
