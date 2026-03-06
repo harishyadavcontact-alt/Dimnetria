@@ -36,3 +36,10 @@ def test_scenario_run_and_fetch():
     result = result_resp.json()
     assert "deltas" in result
     assert "IND" in result["deltas"]
+
+
+def test_dashboard_root_serves_html_ui():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Dimnetria Live Resilience Deck" in response.text
