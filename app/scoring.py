@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from app.data import BASE_DATE, COUNTRIES, DALIO_STAGE_TO_MULTIPLIER, METRICS_BY_COUNTRY, PILLAR_WEIGHTS
-from app.models import CountrySummary, LawMultiplier, PillarScore, RRFIResult, ScenarioRunResult
+from app.models import BeautySpotlightCard, BeautySpotlightResponse, CountrySummary, LawMultiplier, PillarScore, RRFIResult, ScenarioRunResult
 
 
 def clamp(v: float, lo: float = 0, hi: float = 100) -> float:
@@ -151,3 +151,43 @@ def run_dalio_scenario(dalio_stage: int, shock_severity: float) -> ScenarioRunRe
         deltas=deltas,
         explanations=explanations,
     )
+
+
+def _resilience_tier(score: float) -> str:
+    if score >= 75:
+        return "fortress"
+    if score >= 60:
+        return "stable"
+    if score >= 45:
+        return "watch"
+    return "critical"
+
+
+def _accent_for_tier(tier: str) -> str:
+    return {
+        "fortress": "#14B8A6",
+        "stable": "#4F46E5",
+        "watch": "#F59E0B",
+        "critical": "#EF4444",
+    }[tier]
+
+
+def build_beauty_spotlight(limit: int = 4) -> BeautySpotlightResponse:
+    ranked = sorted(rrfi_world(), key=lambda summary: summary.rrfi.final_score, reverse=True)
+    cards: list[BeautySpotlightCard] = []
+    for summary in ranked[: max(1, limit)]:
+        score = summary.rrfi.final_score
+        tier = _resilience_tier(score)
+        cards.append(
+            BeautySpotlightCard(
+                iso3=summary.iso3,
+                country=summary.name,
+                rrfi_score=score,
+                resilience_tier=tier,
+                headline=f"{summary.name} resilience outlook: {tier.title()}",
+                vibe=" · ".join(summary.top_drivers),
+                accent_hex=_accent_for_tier(tier),
+            )
+        )
+
+    return BeautySpotlightResponse(generated_at=datetime.utcnow(), cards=cards)

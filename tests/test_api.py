@@ -36,3 +36,17 @@ def test_scenario_run_and_fetch():
     result = result_resp.json()
     assert "deltas" in result
     assert "IND" in result["deltas"]
+
+
+def test_world_beauty_spotlight_returns_ranked_cards():
+    response = client.get("/v1/world/beauty-spotlight?limit=3")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert "generated_at" in payload
+    assert len(payload["cards"]) == 3
+
+    first, second = payload["cards"][0], payload["cards"][1]
+    assert first["rrfi_score"] >= second["rrfi_score"]
+    assert first["resilience_tier"] in {"fortress", "stable", "watch", "critical"}
+    assert first["accent_hex"].startswith("#")

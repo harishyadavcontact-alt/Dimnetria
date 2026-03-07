@@ -79,3 +79,18 @@ class ScenarioRunResult(BaseModel):
     params_json: dict[str, Any]
     deltas: dict[str, float]
     explanations: dict[str, str]
+
+
+class BeautySpotlightCard(BaseModel):
+    iso3: str
+    country: str
+    rrfi_score: float
+    resilience_tier: Literal["fortress", "stable", "watch", "critical"]
+    headline: str
+    vibe: str
+    accent_hex: str
+
+
+class BeautySpotlightResponse(BaseModel):
+    generated_at: datetime
+    cards: list[BeautySpotlightCard]

@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 
 from app.data import COUNTRIES
 from app.models import LayerMetadata, ScenarioRunRequest
-from app.scoring import rrfi_for_country, rrfi_world, run_dalio_scenario
+from app.scoring import build_beauty_spotlight, rrfi_for_country, rrfi_world, run_dalio_scenario
 
 app = FastAPI(title="Dimentria RRFI API", version="0.1.0")
 
@@ -47,6 +47,12 @@ def get_country_summary(iso3: str, date: str | None = None) -> dict:
 @app.get("/v1/layers")
 def get_layers() -> dict:
     return {"layers": [layer.model_dump() for layer in LAYERS]}
+
+
+@app.get("/v1/world/beauty-spotlight")
+def get_world_beauty_spotlight(limit: int = 4) -> dict:
+    spotlight = build_beauty_spotlight(limit=limit)
+    return spotlight.model_dump(mode="json")
 
 
 @app.get("/v1/layer/{layer_id}/tiles/{z}/{x}/{y}")
