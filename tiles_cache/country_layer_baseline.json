@@ -1,0 +1,42 @@
+[
+  {
+    "iso3": "IND",
+    "name": "India",
+    "date": "2026-03-05",
+    "rrfi": 57.43,
+    "water": 45,
+    "food": 70,
+    "debt": 60,
+    "military": 68
+  },
+  {
+    "iso3": "USA",
+    "name": "United States",
+    "date": "2026-03-05",
+    "rrfi": 60.39,
+    "water": 65,
+    "food": 88,
+    "debt": 65,
+    "military": 92
+  },
+  {
+    "iso3": "EGY",
+    "name": "Egypt",
+    "date": "2026-03-05",
+    "rrfi": 25.78,
+    "water": 30,
+    "food": 36,
+    "debt": 72,
+    "military": 54
+  },
+  {
+    "iso3": "DEU",
+    "name": "Germany",
+    "date": "2026-03-05",
+    "rrfi": 53.47,
+    "water": 77,
+    "food": 62,
+    "debt": 44,
+    "military": 50
+  }
+]
