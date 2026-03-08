@@ -8,20 +8,41 @@ from app.data import (
     CHOKEPOINTS,
     COUNTRIES,
     DALIO_STAGE_TO_MULTIPLIER,
+    DATA_VERSION,
     ECC_TOPIC_DATA,
     LAW_LAYER_BASELINES,
-    METRICS_BY_COUNTRY,
     PILLAR_WEIGHTS,
 )
+from app.ingestion import repository
 from app.models import (
     BeautySpotlightCard,
     BeautySpotlightResponse,
+    CountryLayerSnapshot,
     CountrySummary,
+    DailyBrief,
+    DailyBriefEntry,
     LawMultiplier,
+    MetricSnapshot,
     PillarScore,
     RRFIResult,
+    ScenarioDefinition,
     ScenarioRunResult,
+    ScoreProvenance,
+    Watchlist,
 )
+
+REQUIRED_METRICS = {
+    "demographics",
+    "water_security",
+    "food_self_reliance",
+    "health_resilience",
+    "debt_burden",
+    "military_autonomy",
+    "geography_exposure",
+    "social_cohesion",
+    "physics_grid_dependency",
+    "chokepoint_import_dependence",
+}
 
 
 def clamp(v: float, lo: float = 0, hi: float = 100) -> float:
@@ -34,8 +55,57 @@ def normalize_metric(value: float, min_v: float = 0.0, max_v: float = 100.0) -> 
     return clamp(((value - min_v) / (max_v - min_v)) * 100.0)
 
 
-def compute_pillars(iso3: str) -> list[PillarScore]:
-    m = METRICS_BY_COUNTRY[iso3]
+def _validate_inputs(
+    *,
+    iso3: str | None = None,
+    dalio_stage: int | None = None,
+    shock_severity: float | None = None,
+    chokepoint_closure: float | None = None,
+    solar_storm_severity: float | None = None,
+) -> None:
+    if iso3 and iso3 not in COUNTRIES:
+        raise ValueError(f"Unknown country ISO3: {iso3}")
+    if dalio_stage is not None and dalio_stage not in DALIO_STAGE_TO_MULTIPLIER:
+        raise ValueError("dalio_stage must be between 1 and 7")
+    for label, value in {
+        "shock_severity": shock_severity,
+        "chokepoint_closure": chokepoint_closure,
+        "solar_storm_severity": solar_storm_severity,
+    }.items():
+        if value is not None and not 0.0 <= value <= 1.0:
+            raise ValueError(f"{label} must be between 0 and 1")
+
+
+def _metric_index(iso3: str) -> tuple[dict[str, MetricSnapshot], list[str]]:
+    _validate_inputs(iso3=iso3)
+    snapshots, warnings = repository.validate_country_metrics(iso3)
+    index = {snapshot.metric_id: snapshot for snapshot in snapshots}
+    missing = REQUIRED_METRICS - set(index)
+    if missing:
+        raise ValueError(f"Missing metric snapshots for {iso3}: {', '.join(sorted(missing))}")
+    return index, warnings
+
+
+def _metric_values(index: dict[str, MetricSnapshot]) -> dict[str, float]:
+    return {metric_id: snapshot.value for metric_id, snapshot in index.items()}
+
+
+def build_provenance(index: dict[str, MetricSnapshot]) -> ScoreProvenance:
+    snapshots = list(index.values())
+    confidence = round(sum(snapshot.confidence for snapshot in snapshots) / max(len(snapshots), 1), 3)
+    return ScoreProvenance(
+        as_of=max(snapshot.observed_at for snapshot in snapshots),
+        data_version=DATA_VERSION,
+        confidence=confidence,
+        source_count=len({snapshot.source for snapshot in snapshots}),
+        staleness_days=max(snapshot.staleness_days for snapshot in snapshots),
+        metric_snapshots=sorted(snapshots, key=lambda snapshot: snapshot.metric_id),
+    )
+
+
+def compute_pillars(iso3: str) -> tuple[list[PillarScore], ScoreProvenance, list[str]]:
+    index, warnings = _metric_index(iso3)
+    m = _metric_values(index)
     finance_resilience = 100 - m["debt_burden"]
     geography_resilience = (m["geography_exposure"] + (100 - m["chokepoint_import_dependence"])) / 2
 
@@ -66,24 +136,27 @@ def compute_pillars(iso3: str) -> list[PillarScore]:
         "physics": {"grid_dependency_inverted": 100 - m["physics_grid_dependency"]},
     }
 
-    return [
+    pillars = [
         PillarScore(
             pillar_id=pillar_id,
             geo_id=iso3,
             date=BASE_DATE,
-            score_0_100=clamp(score),
+            score_0_100=round(clamp(score), 2),
             components=components[pillar_id],
         )
         for pillar_id, score in pillar_values.items()
     ]
+    return pillars, build_provenance(index), warnings
 
 
 def compute_law_multipliers(iso3: str, solar_storm_severity: float = 0.0) -> list[LawMultiplier]:
-    m = METRICS_BY_COUNTRY[iso3]
+    _validate_inputs(iso3=iso3, solar_storm_severity=solar_storm_severity)
+    index, _ = _metric_index(iso3)
+    m = _metric_values(index)
     physics_base = LAW_LAYER_BASELINES["physics"]
     if m["physics_grid_dependency"] > 70:
         physics_base -= 0.05
-    physics_base -= 0.08 * max(0.0, min(1.0, solar_storm_severity))
+    physics_base -= 0.08 * solar_storm_severity
 
     return [
         LawMultiplier(
@@ -118,7 +191,7 @@ def compute_law_multipliers(iso3: str, solar_storm_severity: float = 0.0) -> lis
             law_layer_id="land",
             geo_id=iso3,
             date=BASE_DATE,
-            multiplier=0.94 if m["debt_burden"] < 35 else LAW_LAYER_BASELINES["land"],
+            multiplier=0.94 if m["debt_burden"] > 55 else LAW_LAYER_BASELINES["land"],
             explanation="Debt stress constrains policy response capacity.",
         ),
         LawMultiplier(
@@ -132,8 +205,9 @@ def compute_law_multipliers(iso3: str, solar_storm_severity: float = 0.0) -> lis
 
 
 def compute_wartime_multiplier(iso3: str, chokepoint_closure: float = 0.0) -> tuple[float, list[str]]:
-    m = METRICS_BY_COUNTRY[iso3]
-    warnings: list[str] = []
+    _validate_inputs(iso3=iso3, chokepoint_closure=chokepoint_closure)
+    index, warnings = _metric_index(iso3)
+    m = _metric_values(index)
     wartime = 1.0
 
     if m["food_self_reliance"] < 45 and m["chokepoint_import_dependence"] > 65:
@@ -145,8 +219,6 @@ def compute_wartime_multiplier(iso3: str, chokepoint_closure: float = 0.0) -> tu
     if m["health_resilience"] < 50:
         wartime *= 0.95
         warnings.append("Health-system fragility increases epidemic meltdown risk.")
-
-    chokepoint_closure = max(0.0, min(1.0, chokepoint_closure))
     if chokepoint_closure > 0.0:
         wartime *= 1 - (0.2 * chokepoint_closure)
         warnings.append(f"Chokepoint closure severity {chokepoint_closure:.2f} reduced wartime continuity.")
@@ -155,23 +227,29 @@ def compute_wartime_multiplier(iso3: str, chokepoint_closure: float = 0.0) -> tu
 
 
 def rrfi_for_country(iso3: str, *, solar_storm_severity: float = 0.0, chokepoint_closure: float = 0.0) -> CountrySummary:
-    pillars = compute_pillars(iso3)
+    pillars, provenance, warnings = compute_pillars(iso3)
     base_rrfi = sum(PILLAR_WEIGHTS[pillar.pillar_id] * pillar.score_0_100 for pillar in pillars)
-
     multipliers = compute_law_multipliers(iso3, solar_storm_severity=solar_storm_severity)
     law_product = 1.0
     for multiplier in multipliers:
         law_product *= multiplier.multiplier
 
-    wartime_multiplier, warnings = compute_wartime_multiplier(iso3, chokepoint_closure=chokepoint_closure)
-    final_rrfi = clamp(base_rrfi * law_product * wartime_multiplier)
+    wartime_multiplier, wartime_warnings = compute_wartime_multiplier(iso3, chokepoint_closure=chokepoint_closure)
+    warnings.extend(wartime_warnings)
+    if provenance.staleness_days > 30:
+        warnings.append("Source freshness is degraded; treat ranking deltas as lower confidence.")
+    if provenance.confidence < 0.7:
+        warnings.append("Composite source confidence is below analyst-grade target.")
 
+    final_rrfi = clamp(base_rrfi * law_product * wartime_multiplier)
     sorted_pillars = sorted(pillars, key=lambda pillar: pillar.score_0_100)
     top_drivers = [f"{pillar.pillar_id} weakness ({pillar.score_0_100:.1f})" for pillar in sorted_pillars[:3]]
-
     explanation_graph = {
+        "raw_metrics_to_features": "metric snapshots -> normalized features",
+        "features_to_pillars": "normalized features -> weighted pillar scores",
+        "pillars_to_rrfi": "pillars -> law multipliers -> wartime adjustment -> final score",
         "base_rrfi": round(base_rrfi, 2),
-        "law_multipliers": [multiplier.model_dump() for multiplier in multipliers],
+        "law_multipliers": [multiplier.model_dump(mode="json") for multiplier in multipliers],
         "law_product": round(law_product, 4),
         "wartime_multiplier": round(wartime_multiplier, 4),
         "inputs": {
@@ -181,23 +259,22 @@ def rrfi_for_country(iso3: str, *, solar_storm_severity: float = 0.0, chokepoint
         "drivers": top_drivers,
     }
 
-    rrfi = RRFIResult(
-        geo_id=iso3,
-        date=BASE_DATE,
-        rrfi_0_100=round(base_rrfi, 2),
-        wartime_multiplier=round(wartime_multiplier, 4),
-        final_score=round(final_rrfi, 2),
-        explanation_graph=explanation_graph,
-    )
-
     return CountrySummary(
         iso3=iso3,
         name=COUNTRIES[iso3]["name"],
         date=BASE_DATE,
-        rrfi=rrfi,
+        rrfi=RRFIResult(
+            geo_id=iso3,
+            date=BASE_DATE,
+            rrfi_0_100=round(base_rrfi, 2),
+            wartime_multiplier=round(wartime_multiplier, 4),
+            final_score=round(final_rrfi, 2),
+            explanation_graph=explanation_graph,
+        ),
         pillar_scores=pillars,
         top_drivers=top_drivers,
         warnings=warnings,
+        provenance=provenance,
     )
 
 
@@ -220,21 +297,24 @@ def _layer_value(
         solar_storm_severity=solar_storm_severity,
         chokepoint_closure=chokepoint_closure,
     )
-    metric = METRICS_BY_COUNTRY[iso3]
+    metric_index, _ = _metric_index(iso3)
 
     if layer_id == "rrfi":
         return summary.rrfi.final_score
     if layer_id == "water":
-        return metric["water_security"]
+        return metric_index["water_security"].value
     if layer_id == "food":
-        return metric["food_self_reliance"]
+        return metric_index["food_self_reliance"].value
     if layer_id == "debt":
-        return 100 - metric["debt_burden"]
+        return 100 - metric_index["debt_burden"].value
     if layer_id == "military":
-        return metric["military_autonomy"]
+        return metric_index["military_autonomy"].value
     if layer_id == "geography":
         choke_risk = 10 * chokepoint_closure if CHOKEPOINTS else 0.0
-        return ((metric["geography_exposure"] + (100 - metric["chokepoint_import_dependence"])) / 2) - choke_risk
+        return (
+            metric_index["geography_exposure"].value
+            + (100 - metric_index["chokepoint_import_dependence"].value)
+        ) / 2 - choke_risk
     if layer_id == "ecc_bull":
         return ECC_TOPIC_DATA[iso3]["ecc_bull_intensity"] * 100
     if layer_id == "ecc_bear":
@@ -247,31 +327,31 @@ def world_layer_snapshot(
     layer_id: str = "rrfi",
     solar_storm_severity: float = 0.0,
     chokepoint_closure: float = 0.0,
-) -> list[dict[str, float | str]]:
-    summaries = {
-        summary.iso3: summary
-        for summary in rrfi_world(
-            solar_storm_severity=solar_storm_severity,
-            chokepoint_closure=chokepoint_closure,
-        )
-    }
-    rows: list[dict[str, float | str]] = []
-    for iso3, summary in summaries.items():
+) -> list[CountryLayerSnapshot]:
+    rows: list[CountryLayerSnapshot] = []
+    for summary in rrfi_world(
+        solar_storm_severity=solar_storm_severity,
+        chokepoint_closure=chokepoint_closure,
+    ):
         rows.append(
-            {
-                "iso3": iso3,
-                "name": COUNTRIES[iso3]["name"],
-                "value": round(
+            CountryLayerSnapshot(
+                iso3=summary.iso3,
+                name=summary.name,
+                layer_id=layer_id,
+                value=round(
                     _layer_value(
-                        iso3,
+                        summary.iso3,
                         layer_id,
                         solar_storm_severity=solar_storm_severity,
                         chokepoint_closure=chokepoint_closure,
                     ),
                     2,
                 ),
-                "top_driver": summary.top_drivers[0],
-            }
+                top_driver=summary.top_drivers[0],
+                confidence=summary.provenance.confidence,
+                source_count=summary.provenance.source_count,
+                staleness_days=summary.provenance.staleness_days,
+            )
         )
     return rows
 
@@ -285,7 +365,13 @@ def _scenario_layer_adjustment(
     chokepoint_closure: float,
     solar_storm_severity: float,
 ) -> float:
-    stage_mult = DALIO_STAGE_TO_MULTIPLIER.get(dalio_stage, 0.85)
+    _validate_inputs(
+        dalio_stage=dalio_stage,
+        shock_severity=shock_severity,
+        chokepoint_closure=chokepoint_closure,
+        solar_storm_severity=solar_storm_severity,
+    )
+    stage_mult = DALIO_STAGE_TO_MULTIPLIER[dalio_stage]
     if layer_id == "rrfi":
         return clamp(base_value * stage_mult * (1 - (0.15 * shock_severity)))
     if layer_id == "water":
@@ -312,10 +398,10 @@ def scenario_layer_delta(
     shock_severity: float = 0.5,
     chokepoint_closure: float = 0.0,
     solar_storm_severity: float = 0.0,
-) -> list[dict[str, float | str]]:
-    baseline = {row["iso3"]: row for row in world_layer_snapshot(layer_id=layer_id)}
+) -> list[dict[str, float | str | int]]:
+    baseline = {row.iso3: row for row in world_layer_snapshot(layer_id=layer_id)}
     stressed = {
-        row["iso3"]: row
+        row.iso3: row
         for row in world_layer_snapshot(
             layer_id=layer_id,
             solar_storm_severity=solar_storm_severity,
@@ -323,13 +409,12 @@ def scenario_layer_delta(
         )
     }
 
-    rows: list[dict[str, float | str]] = []
+    rows: list[dict[str, float | str | int]] = []
     for iso3, base_row in baseline.items():
-        base_value = float(base_row["value"])
-        stressed_value = float(stressed[iso3]["value"])
+        stressed_row = stressed[iso3]
         scenario_value = _scenario_layer_adjustment(
             layer_id,
-            stressed_value,
+            stressed_row.value,
             dalio_stage=dalio_stage,
             shock_severity=shock_severity,
             chokepoint_closure=chokepoint_closure,
@@ -338,11 +423,14 @@ def scenario_layer_delta(
         rows.append(
             {
                 "iso3": iso3,
-                "name": str(base_row["name"]),
-                "baseline": round(base_value, 2),
+                "name": base_row.name,
+                "baseline": round(base_row.value, 2),
                 "scenario": round(scenario_value, 2),
-                "delta": round(scenario_value - base_value, 2),
-                "top_driver": str(stressed[iso3]["top_driver"]),
+                "delta": round(scenario_value - base_row.value, 2),
+                "top_driver": stressed_row.top_driver,
+                "confidence": stressed_row.confidence,
+                "source_count": stressed_row.source_count,
+                "staleness_days": stressed_row.staleness_days,
             }
         )
     return rows
@@ -353,6 +441,8 @@ def run_dalio_scenario(
     shock_severity: float,
     chokepoint_closure: float = 0.0,
     solar_storm_severity: float = 0.0,
+    *,
+    scenario_id: str | None = None,
 ) -> ScenarioRunResult:
     rows = scenario_layer_delta(
         layer_id="rrfi",
@@ -362,18 +452,8 @@ def run_dalio_scenario(
         solar_storm_severity=solar_storm_severity,
     )
 
-    deltas = {str(row["iso3"]): float(row["delta"]) for row in rows}
-    scenario_scores = {str(row["iso3"]): float(row["scenario"]) for row in rows}
-    explanations = {
-        str(row["iso3"]): (
-            f"Dalio stage {dalio_stage}, shock severity {shock_severity}, "
-            f"chokepoint closure {chokepoint_closure}, solar storm severity {solar_storm_severity}."
-        )
-        for row in rows
-    }
-
     return ScenarioRunResult(
-        scenario_id=str(uuid4()),
+        scenario_id=scenario_id or str(uuid4()),
         created_at=datetime.now(timezone.utc),
         params_json={
             "dalio_stage": dalio_stage,
@@ -381,9 +461,15 @@ def run_dalio_scenario(
             "chokepoint_closure": chokepoint_closure,
             "solar_storm_severity": solar_storm_severity,
         },
-        deltas=deltas,
-        scenario_scores=scenario_scores,
-        explanations=explanations,
+        deltas={str(row["iso3"]): float(row["delta"]) for row in rows},
+        scenario_scores={str(row["iso3"]): float(row["scenario"]) for row in rows},
+        explanations={
+            str(row["iso3"]): (
+                f"Dalio stage {dalio_stage}, shock severity {shock_severity}, "
+                f"chokepoint closure {chokepoint_closure}, solar storm severity {solar_storm_severity}."
+            )
+            for row in rows
+        },
     )
 
 
@@ -400,9 +486,9 @@ def _resilience_tier(score: float) -> str:
 def _accent_for_tier(tier: str) -> str:
     return {
         "fortress": "#14B8A6",
-        "stable": "#4F46E5",
+        "stable": "#2563EB",
         "watch": "#F59E0B",
-        "critical": "#EF4444",
+        "critical": "#DC2626",
     }[tier]
 
 
@@ -410,13 +496,12 @@ def build_beauty_spotlight(limit: int = 4) -> BeautySpotlightResponse:
     ranked = sorted(rrfi_world(), key=lambda summary: summary.rrfi.final_score, reverse=True)
     cards: list[BeautySpotlightCard] = []
     for summary in ranked[: max(1, limit)]:
-        score = summary.rrfi.final_score
-        tier = _resilience_tier(score)
+        tier = _resilience_tier(summary.rrfi.final_score)
         cards.append(
             BeautySpotlightCard(
                 iso3=summary.iso3,
                 country=summary.name,
-                rrfi_score=score,
+                rrfi_score=summary.rrfi.final_score,
                 resilience_tier=tier,
                 headline=f"{summary.name} resilience outlook: {tier.title()}",
                 vibe=" | ".join(summary.top_drivers),
@@ -424,3 +509,60 @@ def build_beauty_spotlight(limit: int = 4) -> BeautySpotlightResponse:
             )
         )
     return BeautySpotlightResponse(generated_at=datetime.now(timezone.utc), cards=cards)
+
+
+def build_daily_brief(
+    *,
+    watchlists: list[Watchlist],
+    scenario: ScenarioDefinition | None = None,
+) -> DailyBrief:
+    params = scenario.params if scenario else {
+        "dalio_stage": 5,
+        "shock_severity": 0.35,
+        "chokepoint_closure": 0.15,
+        "solar_storm_severity": 0.1,
+    }
+    rows = sorted(
+        scenario_layer_delta(
+            layer_id="rrfi",
+            dalio_stage=int(params["dalio_stage"]),
+            shock_severity=float(params["shock_severity"]),
+            chokepoint_closure=float(params["chokepoint_closure"]),
+            solar_storm_severity=float(params["solar_storm_severity"]),
+        ),
+        key=lambda row: float(row["delta"]),
+    )
+    top = []
+    for row in rows[:5]:
+        summary = rrfi_for_country(str(row["iso3"]))
+        top.append(
+            DailyBriefEntry(
+                iso3=str(row["iso3"]),
+                country=str(row["name"]),
+                score=float(row["scenario"]),
+                delta=float(row["delta"]),
+                top_driver=str(row["top_driver"]),
+                warning_count=len(summary.warnings),
+            )
+        )
+
+    focus = []
+    for watchlist in watchlists:
+        for item in watchlist.items:
+            focus.append(f"{item.kind}:{item.label}")
+    focus = focus[:6]
+
+    return DailyBrief(
+        generated_at=datetime.now(timezone.utc),
+        as_of=BASE_DATE,
+        data_version=DATA_VERSION,
+        headline="Fragility pressure remains concentrated around supply chains, debt stress, and water insecurity.",
+        nowcast_summary="Elevated chokepoint tension and moderate solar-watch risk skew downside scenarios toward import-dependent states.",
+        watchlist_focus=focus,
+        top_deteriorations=top,
+        analyst_notes=[
+            "Monitor countries with low food self-reliance and high chokepoint dependence for nonlinear downside moves.",
+            "Use scenario compare mode to distinguish structural weakness from transient nowcast-driven deterioration.",
+            "Confidence degrades as source freshness ages; treat stale movers as review candidates, not final truth.",
+        ],
+    )

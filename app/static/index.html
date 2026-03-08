@@ -3,88 +3,382 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dimentria HUD (MVP)</title>
+    <title>Dimentria Analyst Desk</title>
     <style>
-      :root { color-scheme: dark; }
-      body { margin: 0; font-family: Inter, system-ui, sans-serif; background:#020617; color:#e2e8f0; }
-      #app { display: grid; grid-template-columns: 320px 1fr; height: 100vh; }
-      #sidebar { padding: 14px; overflow:auto; border-right:1px solid #1e293b; background:#0b1220; }
-      #mapWrap { position:relative; background:#020617; }
-      #mapSvg { width:100%; height:100%; display:block; }
-      .card { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:10px; margin-bottom:10px; }
-      label { display:block; margin:6px 0 2px; font-size:12px; color:#93c5fd; }
-      input, select, button { width:100%; padding:8px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; }
-      button { cursor:pointer; background:#1d4ed8; border:none; margin-top:8px; }
-      .legend { position:absolute; right:16px; bottom:16px; background:#111827e8; border:1px solid #334155; border-radius:8px; padding:8px; width:200px; }
-      .scale { height:8px; border-radius:999px; background: linear-gradient(90deg,#7f1d1d,#b45309,#eab308,#16a34a); margin:6px 0; }
-      .scale.delta { background: linear-gradient(90deg,#7f1d1d,#dc2626,#64748b,#16a34a,#065f46); }
-      .mini { font-size:11px; color:#94a3b8; }
-      .chips { display:flex; gap:4px; flex-wrap:wrap; }
-      .chip { font-size:11px; background:#1e293b; border:1px solid #334155; border-radius:999px; padding:2px 6px; }
-      pre { margin:0; white-space: pre-wrap; font-size:11px; }
+      :root {
+        --bg: #09111d;
+        --panel: rgba(9, 17, 29, 0.88);
+        --panel-2: rgba(16, 28, 46, 0.92);
+        --line: #224161;
+        --text: #e7eef7;
+        --muted: #8fa8c2;
+        --accent: #5eead4;
+        --accent-2: #f59e0b;
+        --risk: #dc2626;
+        --warn: #f97316;
+        --ok: #16a34a;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(94, 234, 212, 0.12), transparent 25%),
+          radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.12), transparent 25%),
+          linear-gradient(180deg, #040a12, var(--bg));
+      }
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 300px 1fr 360px;
+      }
+      .rail, .side {
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border-right: 1px solid var(--line);
+        padding: 18px 16px;
+      }
+      .side {
+        border-right: none;
+        border-left: 1px solid var(--line);
+      }
+      .center {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100vh;
+      }
+      .topbar {
+        padding: 18px 20px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      h1, h2, h3, p { margin: 0; }
+      h1 {
+        font-size: 28px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .subtitle {
+        color: var(--muted);
+        margin-top: 6px;
+        font-size: 13px;
+      }
+      .section-title {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+      .card {
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+      }
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+      }
+      .kpi-value {
+        margin-top: 6px;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .kpi-label {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+      .main-grid {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 14px;
+        padding: 16px 18px;
+        min-height: 0;
+      }
+      .map-card {
+        position: relative;
+        overflow: hidden;
+      }
+      .map-stage {
+        height: 100%;
+        min-height: 520px;
+        border-radius: 12px;
+        background:
+          linear-gradient(180deg, rgba(10, 20, 34, 0.7), rgba(6, 14, 24, 0.95)),
+          radial-gradient(circle at 30% 20%, rgba(94, 234, 212, 0.08), transparent 30%);
+        border: 1px solid var(--line);
+        position: relative;
+      }
+      #mapSvg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .legend {
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+        width: 220px;
+      }
+      .scale {
+        height: 10px;
+        border-radius: 999px;
+        margin: 8px 0 6px;
+        background: linear-gradient(90deg, #7f1d1d, #b45309, #eab308, #16a34a);
+      }
+      .scale.delta {
+        background: linear-gradient(90deg, #7f1d1d, #dc2626, #475569, #16a34a, #064e3b);
+      }
+      .mini {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .control-grid {
+        display: grid;
+        gap: 10px;
+      }
+      label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      input, select, button {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #0b1728;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+      input[type="range"] {
+        padding: 0;
+      }
+      button {
+        cursor: pointer;
+        background: linear-gradient(90deg, #0f766e, #0ea5a4);
+        border: none;
+        font-weight: 700;
+      }
+      .btn-secondary {
+        background: linear-gradient(90deg, #1d4ed8, #2563eb);
+      }
+      .list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+      .list li {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(7, 15, 25, 0.6);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .mono {
+        font-family: Consolas, monospace;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .danger { color: #fecaca; background: rgba(127, 29, 29, 0.35); }
+      .positive { color: #bbf7d0; background: rgba(20, 83, 45, 0.35); }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      @media (max-width: 1200px) {
+        .shell {
+          grid-template-columns: 280px 1fr;
+        }
+        .side {
+          grid-column: 1 / -1;
+          border-left: none;
+          border-top: 1px solid var(--line);
+        }
+      }
+      @media (max-width: 900px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+        .rail {
+          border-right: none;
+          border-bottom: 1px solid var(--line);
+        }
+        .main-grid {
+          grid-template-columns: 1fr;
+        }
+        .kpis {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
     </style>
   </head>
   <body>
-    <div id="app">
-      <aside id="sidebar">
-        <h3 style="margin:0 0 8px;">Dimentria</h3>
-        <div class="card">
-          <label>Primary Layer</label>
-          <select id="layerSel">
-            <option value="rrfi">RRFI</option>
-            <option value="water">Water</option>
-            <option value="food">Food</option>
-            <option value="debt">Debt Discipline</option>
-            <option value="military">Military</option>
-            <option value="geography">Geography/Chokepoint</option>
-          </select>
-          <label>View Mode</label>
-          <select id="modeSel">
-            <option value="baseline">Baseline</option>
-            <option value="scenario">Scenario Delta</option>
-          </select>
-        </div>
+    <div class="shell">
+      <aside class="rail">
+        <div class="stack">
+          <div>
+            <h1>Dimentria</h1>
+            <p class="subtitle">Fragility workstation for geopolitical analysts.</p>
+          </div>
 
-        <div class="card">
-          <div class="chips"><span class="chip">Dalio stage</span><span class="chip" id="stageOut">5</span></div>
-          <input id="stage" type="range" min="1" max="7" value="5" />
-          <div class="chips"><span class="chip">Shock</span><span class="chip" id="shockOut">0.5</span></div>
-          <input id="shock" type="range" min="0" max="1" step="0.1" value="0.5" />
-          <div class="chips"><span class="chip">Chokepoint closure</span><span class="chip" id="chokeOut">0.0</span></div>
-          <input id="choke" type="range" min="0" max="1" step="0.1" value="0" />
-          <div class="chips"><span class="chip">Solar severity</span><span class="chip" id="solarOut">0.0</span></div>
-          <input id="solar" type="range" min="0" max="1" step="0.1" value="0" />
-          <button id="refresh">Refresh map</button>
-        </div>
+          <section class="card">
+            <div class="section-title">Scenario Console</div>
+            <div class="control-grid">
+              <div>
+                <label for="layerSel">Primary layer</label>
+                <select id="layerSel">
+                  <option value="rrfi">RRFI</option>
+                  <option value="water">Water</option>
+                  <option value="food">Food</option>
+                  <option value="debt">Debt</option>
+                  <option value="military">Military</option>
+                  <option value="geography">Geography</option>
+                </select>
+              </div>
+              <div>
+                <label for="modeSel">View mode</label>
+                <select id="modeSel">
+                  <option value="baseline">Baseline</option>
+                  <option value="scenario">Scenario delta</option>
+                </select>
+              </div>
+              <div>
+                <label for="presetSel">Scenario preset</label>
+                <select id="presetSel"></select>
+              </div>
+              <div>
+                <label for="stage">Dalio stage <span id="stageOut" class="mono">5</span></label>
+                <input id="stage" type="range" min="1" max="7" value="5" />
+              </div>
+              <div>
+                <label for="shock">Shock severity <span id="shockOut" class="mono">0.5</span></label>
+                <input id="shock" type="range" min="0" max="1" step="0.1" value="0.5" />
+              </div>
+              <div>
+                <label for="choke">Chokepoint closure <span id="chokeOut" class="mono">0.0</span></label>
+                <input id="choke" type="range" min="0" max="1" step="0.1" value="0" />
+              </div>
+              <div>
+                <label for="solar">Solar severity <span id="solarOut" class="mono">0.0</span></label>
+                <input id="solar" type="range" min="0" max="1" step="0.1" value="0" />
+              </div>
+              <button id="refresh">Refresh map</button>
+              <button id="saveScenario" class="btn-secondary">Save current scenario</button>
+            </div>
+          </section>
 
-        <div class="card">
-          <strong>Selection</strong>
-          <pre id="selection">Click a country for drilldown.</pre>
-        </div>
+          <section class="card">
+            <div class="section-title">Watchlists</div>
+            <ul id="watchlists" class="list"></ul>
+          </section>
 
-        <div class="card">
-          <strong>Nowcast</strong>
-          <pre id="nowcast">Loading…</pre>
+          <section class="card">
+            <div class="section-title">Nowcast</div>
+            <pre id="nowcast">Loading...</pre>
+          </section>
         </div>
       </aside>
 
-      <main id="mapWrap">
-        <svg id="mapSvg" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid meet"></svg>
-        <div class="legend">
-          <div id="legendTitle">RRFI baseline</div>
-          <div id="legendScale" class="scale"></div>
-          <div class="mini" id="legendRange">0 → 100</div>
+      <main class="center">
+        <div class="topbar">
+          <div class="row">
+            <div>
+              <h2>Operator Surface</h2>
+              <p class="subtitle">Track world state, stress-test scenarios, and investigate movers without leaving the map.</p>
+            </div>
+            <div class="badge" id="metaBadge">loading</div>
+          </div>
+          <div class="kpis" id="kpis"></div>
+        </div>
+
+        <div class="main-grid">
+          <section class="map-card">
+            <div class="map-stage">
+              <svg id="mapSvg" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid meet"></svg>
+              <div class="card legend">
+                <div class="section-title" id="legendTitle">RRFI baseline</div>
+                <div id="legendScale" class="scale"></div>
+                <div class="mini" id="legendRange">0 -> 100 score</div>
+                <div class="mini" id="hoverMeta">Hover a country for live signal.</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="stack">
+            <section class="card">
+              <div class="section-title">Hot Deteriorations</div>
+              <ul id="movers" class="list"></ul>
+            </section>
+            <section class="card">
+              <div class="section-title">Daily Brief</div>
+              <pre id="brief">Loading brief...</pre>
+            </section>
+          </section>
+        </div>
+
+        <div style="padding: 0 18px 18px;">
+          <section class="card">
+            <div class="section-title">Country Drilldown</div>
+            <pre id="selection">Click a country to inspect decomposition, warnings, and source freshness.</pre>
+          </section>
         </div>
       </main>
+
+      <aside class="side">
+        <div class="stack">
+          <section class="card">
+            <div class="section-title">Saved Scenarios</div>
+            <ul id="scenarios" class="list"></ul>
+          </section>
+          <section class="card">
+            <div class="section-title">Saved Alerts</div>
+            <ul id="alerts" class="list"></ul>
+          </section>
+          <section class="card">
+            <div class="section-title">Move Explanation</div>
+            <div id="explanation" class="note">Scenario deltas describe change from baseline under the current stress regime.</div>
+          </section>
+        </div>
+      </aside>
     </div>
 
     <script>
-      const svg = document.getElementById('mapSvg');
-      const selection = document.getElementById('selection');
-      const controls = ['stage','shock','choke','solar'];
-      controls.forEach(id => document.getElementById(id).addEventListener('input', () => {
-        document.getElementById(id + 'Out').textContent = document.getElementById(id).value;
-      }));
+      const svg = document.getElementById("mapSvg");
+      const selection = document.getElementById("selection");
+      const hoverMeta = document.getElementById("hoverMeta");
+      let currentLayerData = null;
 
       function project([lon, lat]) {
         const x = ((lon + 180) / 360) * 1200;
@@ -93,79 +387,230 @@
       }
 
       function colorForValue(value, mode) {
-        const t = Math.max(0, Math.min(1, (value + (mode === 'scenario' ? 30 : 0)) / (mode === 'scenario' ? 60 : 100)));
-        if (mode === 'scenario') {
-          if (value < -10) return '#7f1d1d';
-          if (value < -2) return '#dc2626';
-          if (value < 2) return '#475569';
-          if (value < 10) return '#16a34a';
-          return '#065f46';
+        if (mode === "scenario") {
+          if (value < -15) return "#7f1d1d";
+          if (value < -5) return "#dc2626";
+          if (value < 2) return "#475569";
+          if (value < 10) return "#16a34a";
+          return "#064e3b";
         }
-        if (t < 0.25) return '#7f1d1d';
-        if (t < 0.5) return '#b45309';
-        if (t < 0.75) return '#eab308';
-        return '#16a34a';
+        if (value < 35) return "#7f1d1d";
+        if (value < 50) return "#b45309";
+        if (value < 70) return "#eab308";
+        return "#16a34a";
+      }
+
+      function getParams() {
+        return {
+          layer_id: document.getElementById("layerSel").value,
+          mode: document.getElementById("modeSel").value,
+          dalio_stage: document.getElementById("stage").value,
+          shock_severity: document.getElementById("shock").value,
+          chokepoint_closure: document.getElementById("choke").value,
+          solar_storm_severity: document.getElementById("solar").value
+        };
+      }
+
+      function updateOutputs() {
+        ["stage", "shock", "choke", "solar"].forEach((id) => {
+          document.getElementById(id + "Out").textContent = document.getElementById(id).value;
+        });
       }
 
       function renderMap(features, mode) {
-        svg.innerHTML = '<rect x="0" y="0" width="1200" height="600" fill="#020617" />';
-        features.forEach((f) => {
-          const coords = f.geometry.coordinates[0].map(project);
-          const d = `M ${coords.map(([x,y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L ')} Z`;
-          const value = mode === 'scenario' ? f.properties.delta : f.properties.value;
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', d);
-          path.setAttribute('fill', colorForValue(value ?? 0, mode));
-          path.setAttribute('stroke', '#0f172a');
-          path.setAttribute('stroke-width', '2');
-          path.addEventListener('mouseenter', () => {
-            selection.textContent = `${f.properties.name} (${f.properties.iso3})\n${mode === 'scenario' ? `Delta: ${f.properties.delta}` : `Value: ${f.properties.value}`}\nTop driver: ${f.properties.top_driver}`;
+        svg.innerHTML = '<rect x="0" y="0" width="1200" height="600" fill="#07111d" />';
+        features.forEach((feature) => {
+          const coords = feature.geometry.coordinates[0].map(project);
+          const d = `M ${coords.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(" L ")} Z`;
+          const value = mode === "scenario" ? feature.properties.delta : feature.properties.value;
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", d);
+          path.setAttribute("fill", colorForValue(value ?? 0, mode));
+          path.setAttribute("stroke", "#16304a");
+          path.setAttribute("stroke-width", "1.5");
+          path.style.cursor = "pointer";
+          path.addEventListener("mouseenter", () => {
+            hoverMeta.textContent = `${feature.properties.name} | ${mode === "scenario" ? "delta" : "score"} ${value} | conf ${feature.properties.confidence}`;
           });
-          path.addEventListener('click', async () => {
-            const res = await fetch(`/v1/country/${f.properties.iso3}/summary`);
-            const data = await res.json();
+          path.addEventListener("click", async () => {
+            const params = new URLSearchParams({
+              solar_storm_severity: document.getElementById("solar").value,
+              chokepoint_closure: document.getElementById("choke").value
+            });
+            const response = await fetch(`/v1/country/${feature.properties.iso3}/summary?${params.toString()}`);
+            const data = await response.json();
+            document.getElementById("explanation").textContent = [
+              `Top drivers: ${data.top_drivers.join(", ")}`,
+              `Warnings: ${data.warnings.length ? data.warnings.join(" | ") : "none"}`,
+              `Source freshness: ${data.provenance.staleness_days} days`,
+              `Composite confidence: ${data.provenance.confidence}`
+            ].join("\n");
             selection.textContent = JSON.stringify({
               country: data.name,
               rrfi: data.rrfi.final_score,
               top_drivers: data.top_drivers,
-              warnings: data.warnings
+              warnings: data.warnings,
+              provenance: {
+                as_of: data.provenance.as_of,
+                data_version: data.provenance.data_version,
+                confidence: data.provenance.confidence,
+                source_count: data.provenance.source_count,
+                staleness_days: data.provenance.staleness_days
+              },
+              explanation_graph: data.rrfi.explanation_graph
             }, null, 2);
           });
           svg.appendChild(path);
         });
       }
 
+      function renderKpis(world) {
+        const scores = world.results.map((row) => row.rrfi_score);
+        const mean = scores.reduce((acc, score) => acc + score, 0) / Math.max(scores.length, 1);
+        const fragile = world.results.filter((row) => row.rrfi_score < 45).length;
+        const stale = world.results.filter((row) => row.staleness_days > 0).length;
+        const kpis = [
+          { label: "Countries tracked", value: world.results.length },
+          { label: "Mean RRFI", value: mean.toFixed(1) },
+          { label: "Fragile set", value: fragile },
+          { label: "Freshness checks", value: stale }
+        ];
+        document.getElementById("kpis").innerHTML = kpis.map((kpi) => `
+          <article class="card">
+            <div class="kpi-label">${kpi.label}</div>
+            <div class="kpi-value">${kpi.value}</div>
+          </article>
+        `).join("");
+      }
+
+      function renderMovers(features) {
+        const rows = [...features]
+          .filter((feature) => feature.properties.mode === "scenario")
+          .sort((a, b) => a.properties.delta - b.properties.delta)
+          .slice(0, 6);
+        document.getElementById("movers").innerHTML = rows.map((row) => `
+          <li>
+            <div class="row">
+              <strong>${row.properties.name}</strong>
+              <span class="badge danger">${row.properties.delta}</span>
+            </div>
+            <div class="note">${row.properties.top_driver}</div>
+          </li>
+        `).join("") || '<li class="note">Switch to scenario mode to view top deteriorations.</li>';
+      }
+
+      function renderScenarios(scenarios) {
+        const presetSel = document.getElementById("presetSel");
+        presetSel.innerHTML = scenarios.map((scenario) => `
+          <option value="${scenario.id}">${scenario.name}</option>
+        `).join("");
+        document.getElementById("scenarios").innerHTML = scenarios.map((scenario) => `
+          <li>
+            <div class="row">
+              <strong>${scenario.name}</strong>
+              <span class="badge">${scenario.preset ? "preset" : "saved"}</span>
+            </div>
+            <div class="note">stage ${scenario.params.dalio_stage}, shock ${scenario.params.shock_severity}</div>
+          </li>
+        `).join("");
+      }
+
+      function renderAlerts(alerts) {
+        document.getElementById("alerts").innerHTML = alerts.map((alert) => `
+          <li>
+            <div class="row">
+              <strong>${alert.target_value}</strong>
+              <span class="badge">${alert.status}</span>
+            </div>
+            <div class="note">${alert.target_type} threshold ${alert.threshold ?? "n/a"}</div>
+          </li>
+        `).join("") || '<li class="note">No analyst alerts saved yet.</li>';
+      }
+
+      function renderWatchlists(watchlists) {
+        document.getElementById("watchlists").innerHTML = watchlists.map((watchlist) => `
+          <li>
+            <div class="row">
+              <strong>${watchlist.name}</strong>
+              <span class="badge">${watchlist.items.length} items</span>
+            </div>
+            <div class="note">${watchlist.items.map((item) => item.label).join(", ")}</div>
+          </li>
+        `).join("");
+      }
+
+      function applyScenarioParams(params) {
+        document.getElementById("stage").value = params.dalio_stage;
+        document.getElementById("shock").value = params.shock_severity;
+        document.getElementById("choke").value = params.chokepoint_closure;
+        document.getElementById("solar").value = params.solar_storm_severity;
+        updateOutputs();
+      }
+
+      async function loadStaticPanels() {
+        const [world, nowcast, watchlists, scenarios, alerts, brief] = await Promise.all([
+          fetch("/v1/world/rrfi").then((r) => r.json()),
+          fetch("/v1/nowcast").then((r) => r.json()),
+          fetch("/v1/watchlists").then((r) => r.json()),
+          fetch("/v1/scenarios").then((r) => r.json()),
+          fetch("/v1/alerts").then((r) => r.json()),
+          fetch("/v1/briefs/daily").then((r) => r.json())
+        ]);
+        renderKpis(world);
+        renderWatchlists(watchlists.watchlists);
+        renderScenarios(scenarios.scenarios);
+        renderAlerts(alerts.alerts);
+        document.getElementById("nowcast").textContent = JSON.stringify(nowcast, null, 2);
+        document.getElementById("brief").textContent = JSON.stringify(brief, null, 2);
+        document.getElementById("metaBadge").textContent = `${world.data_version} | as of ${world.as_of}`;
+        if (scenarios.scenarios.length) {
+          applyScenarioParams(scenarios.scenarios[0].params);
+        }
+      }
+
       async function refreshLayer() {
-        const layer_id = document.getElementById('layerSel').value;
-        const mode = document.getElementById('modeSel').value;
-        const params = new URLSearchParams({
-          layer_id,
-          mode,
-          dalio_stage: document.getElementById('stage').value,
-          shock_severity: document.getElementById('shock').value,
-          chokepoint_closure: document.getElementById('choke').value,
-          solar_storm_severity: document.getElementById('solar').value
+        updateOutputs();
+        const params = new URLSearchParams(getParams());
+        const response = await fetch(`/v1/world/layer-view?${params.toString()}`);
+        const data = await response.json();
+        currentLayerData = data;
+        renderMap(data.feature_collection.features, data.mode);
+        renderMovers(data.feature_collection.features);
+        document.getElementById("legendTitle").textContent = `${data.layer_id.toUpperCase()} ${data.mode}`;
+        document.getElementById("legendScale").className = data.mode === "scenario" ? "scale delta" : "scale";
+        document.getElementById("legendRange").textContent = data.mode === "scenario" ? "-30 -> +30 delta" : "0 -> 100 score";
+      }
+
+      async function saveScenario() {
+        const payload = { name: `Desk Scenario ${new Date().toISOString()}`, params: getParams() };
+        await fetch("/v1/scenarios", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
         });
-        const res = await fetch(`/v1/world/layer-view?${params.toString()}`);
-        const data = await res.json();
-        renderMap(data.feature_collection.features, mode);
-        document.getElementById('legendTitle').textContent = `${layer_id.toUpperCase()} ${mode}`;
-        document.getElementById('legendScale').className = mode === 'scenario' ? 'scale delta' : 'scale';
-        document.getElementById('legendRange').textContent = mode === 'scenario' ? '-30 → +30 delta' : '0 → 100 score';
+        const scenarios = await fetch("/v1/scenarios").then((r) => r.json());
+        renderScenarios(scenarios.scenarios);
       }
 
-      async function loadNowcast() {
-        const res = await fetch('/v1/nowcast');
-        const data = await res.json();
-        document.getElementById('nowcast').textContent = JSON.stringify(data.state, null, 2);
-      }
+      document.getElementById("refresh").addEventListener("click", refreshLayer);
+      document.getElementById("saveScenario").addEventListener("click", saveScenario);
+      document.getElementById("modeSel").addEventListener("change", refreshLayer);
+      document.getElementById("layerSel").addEventListener("change", refreshLayer);
+      document.getElementById("presetSel").addEventListener("change", async (event) => {
+        const scenarios = await fetch("/v1/scenarios").then((r) => r.json());
+        const selected = scenarios.scenarios.find((scenario) => scenario.id === event.target.value);
+        if (selected) {
+          applyScenarioParams(selected.params);
+          document.getElementById("modeSel").value = "scenario";
+          refreshLayer();
+        }
+      });
 
-      document.getElementById('refresh').addEventListener('click', refreshLayer);
-      document.getElementById('modeSel').addEventListener('change', refreshLayer);
-      document.getElementById('layerSel').addEventListener('change', refreshLayer);
-
-      loadNowcast();
-      refreshLayer();
+      loadStaticPanels().then(refreshLayer);
+      setInterval(async () => {
+        const nowcast = await fetch("/v1/nowcast").then((r) => r.json());
+        document.getElementById("nowcast").textContent = JSON.stringify(nowcast, null, 2);
+      }, 30000);
     </script>
   </body>
 </html>

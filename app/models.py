@@ -26,6 +26,18 @@ class MetricObservation(BaseModel):
     provenance: str
 
 
+class MetricSnapshot(BaseModel):
+    metric_id: str
+    geo_id: str
+    observed_at: date
+    value: float
+    confidence: float = Field(ge=0, le=1)
+    source: str
+    source_url: str | None = None
+    staleness_days: int = Field(ge=0)
+    transform: str = "seeded_curated_snapshot"
+
+
 class PillarScore(BaseModel):
     pillar_id: str
     geo_id: str
@@ -40,6 +52,15 @@ class LawMultiplier(BaseModel):
     date: date
     multiplier: float
     explanation: str
+
+
+class ScoreProvenance(BaseModel):
+    as_of: date
+    data_version: str
+    confidence: float = Field(ge=0, le=1)
+    source_count: int = Field(ge=0)
+    staleness_days: int = Field(ge=0)
+    metric_snapshots: list[MetricSnapshot]
 
 
 class RRFIResult(BaseModel):
@@ -59,6 +80,7 @@ class CountrySummary(BaseModel):
     pillar_scores: list[PillarScore]
     top_drivers: list[str]
     warnings: list[str]
+    provenance: ScoreProvenance
 
 
 class CountryFeature(BaseModel):
@@ -68,11 +90,68 @@ class CountryFeature(BaseModel):
     geometry: dict[str, Any]
 
 
+class CountryLayerSnapshot(BaseModel):
+    iso3: str
+    name: str
+    layer_id: str
+    value: float
+    top_driver: str
+    confidence: float = Field(ge=0, le=1)
+    source_count: int = Field(ge=0)
+    staleness_days: int = Field(ge=0)
+
+
+class BaselineLayerProperties(BaseModel):
+    iso3: str
+    name: str
+    layer_id: str
+    mode: Literal["baseline"]
+    value: float
+    top_driver: str
+    confidence: float = Field(ge=0, le=1)
+    source_count: int = Field(ge=0)
+    staleness_days: int = Field(ge=0)
+    as_of: date
+    data_version: str
+
+
+class ScenarioLayerProperties(BaseModel):
+    iso3: str
+    name: str
+    layer_id: str
+    mode: Literal["scenario"]
+    baseline: float
+    scenario: float
+    delta: float
+    top_driver: str
+    confidence: float = Field(ge=0, le=1)
+    source_count: int = Field(ge=0)
+    staleness_days: int = Field(ge=0)
+    as_of: date
+    data_version: str
+
+
+class LayerFeature(BaseModel):
+    type: Literal["Feature"] = "Feature"
+    id: str
+    properties: dict[str, Any]
+    geometry: dict[str, Any]
+
+
 class LayerMetadata(BaseModel):
     layer_id: str
     name: str
     unit: str
     legend: str
+
+
+class LayerViewResponse(BaseModel):
+    layer_id: str
+    mode: Literal["baseline", "scenario"]
+    as_of: date
+    data_version: str
+    params: dict[str, float | int]
+    feature_collection: dict[str, Any]
 
 
 class NowcastState(BaseModel):
@@ -88,12 +167,37 @@ class ECCCountrySignal(BaseModel):
     top_topics: list[str]
 
 
-class AlertSubscription(BaseModel):
+class AlertRule(BaseModel):
     id: str
     target_type: Literal["country", "region", "chokepoint", "topic"]
     target_value: str
     threshold: float | None = None
     created_at: datetime
+    updated_at: datetime
+    status: Literal["active", "paused"] = "active"
+
+
+class WatchlistItem(BaseModel):
+    kind: Literal["country", "chokepoint"]
+    value: str
+    label: str
+
+
+class Watchlist(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    items: list[WatchlistItem]
+
+
+class ScenarioDefinition(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    params: dict[str, float | int]
+    preset: bool = False
 
 
 class ScenarioRunRequest(BaseModel):
@@ -123,3 +227,23 @@ class BeautySpotlightCard(BaseModel):
 class BeautySpotlightResponse(BaseModel):
     generated_at: datetime
     cards: list[BeautySpotlightCard]
+
+
+class DailyBriefEntry(BaseModel):
+    iso3: str
+    country: str
+    score: float
+    delta: float
+    top_driver: str
+    warning_count: int
+
+
+class DailyBrief(BaseModel):
+    generated_at: datetime
+    as_of: date
+    data_version: str
+    headline: str
+    nowcast_summary: str
+    watchlist_focus: list[str]
+    top_deteriorations: list[DailyBriefEntry]
+    analyst_notes: list[str]

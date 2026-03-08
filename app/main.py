@@ -1,24 +1,37 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.data import CHOKEPOINTS, COUNTRIES, ECC_TOPIC_DATA, NOWCAST_STATE
-from app.models import AlertSubscription, ECCCountrySignal, LayerMetadata, NowcastState, ScenarioRunRequest
+from app.data import CHOKEPOINTS, COUNTRIES, DATA_VERSION, ECC_TOPIC_DATA, NOWCAST_STATE
+from app.models import (
+    AlertRule,
+    BaselineLayerProperties,
+    ECCCountrySignal,
+    LayerFeature,
+    LayerMetadata,
+    LayerViewResponse,
+    NowcastState,
+    ScenarioDefinition,
+    ScenarioLayerProperties,
+    ScenarioRunRequest,
+    Watchlist,
+)
 from app.scoring import (
     build_beauty_spotlight,
+    build_daily_brief,
     rrfi_for_country,
     rrfi_world,
     run_dalio_scenario,
     scenario_layer_delta,
     world_layer_snapshot,
 )
+from app.storage import storage
 
-app = FastAPI(title="Dimentria RRFI API", version="0.2.0")
+app = FastAPI(title="Dimentria RRFI API", version="0.3.0")
 app.mount("/hud", StaticFiles(directory="app/static", html=True), name="static")
 
 LAYERS = [
@@ -32,8 +45,9 @@ LAYERS = [
     LayerMetadata(layer_id="ecc_bear", name="ECC Bear Intensity", unit="0-100", legend="Narrative concern"),
 ]
 
-_SCENARIOS: dict[str, dict] = {}
-_ALERTS: dict[str, dict] = {}
+
+def api_meta() -> dict[str, object]:
+    return {"as_of": NOWCAST_STATE.get("as_of", None) or str(datetime(2026, 3, 5).date()), "data_version": DATA_VERSION}
 
 
 @app.get("/")
@@ -52,9 +66,12 @@ def get_world_rrfi(
     solar_storm_severity: float = 0.0,
     chokepoint_closure: float = 0.0,
 ) -> dict:
-    return {
-        "date": date,
-        "results": [
+    results = []
+    for summary in rrfi_world(
+        solar_storm_severity=solar_storm_severity,
+        chokepoint_closure=chokepoint_closure,
+    ):
+        results.append(
             {
                 "iso3": summary.iso3,
                 "country_name": summary.name,
@@ -62,13 +79,14 @@ def get_world_rrfi(
                 "top_drivers": summary.top_drivers,
                 "warnings": summary.warnings,
                 "requested_date": date,
+                "as_of": summary.provenance.as_of.isoformat(),
+                "data_version": summary.provenance.data_version,
+                "confidence": summary.provenance.confidence,
+                "source_count": summary.provenance.source_count,
+                "staleness_days": summary.provenance.staleness_days,
             }
-            for summary in rrfi_world(
-                solar_storm_severity=solar_storm_severity,
-                chokepoint_closure=chokepoint_closure,
-            )
-        ],
-    }
+        )
+    return {"date": date, **api_meta(), "results": results}
 
 
 @app.get("/v1/world/layer-view")
@@ -84,49 +102,91 @@ def get_world_layer_view(
         raise HTTPException(status_code=400, detail="mode must be baseline or scenario")
 
     try:
-        rows = (
-            world_layer_snapshot(
+        if mode == "baseline":
+            rows = world_layer_snapshot(
                 layer_id=layer_id,
                 solar_storm_severity=solar_storm_severity,
                 chokepoint_closure=chokepoint_closure,
             )
-            if mode == "baseline"
-            else scenario_layer_delta(
+        else:
+            rows = scenario_layer_delta(
                 layer_id=layer_id,
                 dalio_stage=dalio_stage,
                 shock_severity=shock_severity,
                 solar_storm_severity=solar_storm_severity,
                 chokepoint_closure=chokepoint_closure,
             )
-        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    index = {str(row["iso3"]): row for row in rows}
+    index = {
+        row.iso3 if hasattr(row, "iso3") else str(row["iso3"]): row
+        for row in rows
+    }
     features = []
     for iso3, country in COUNTRIES.items():
-        props = {"iso3": iso3, "name": country["name"], "layer_id": layer_id, "mode": mode}
-        props.update(index.get(iso3, {}))
-        features.append({"type": "Feature", "id": iso3, "properties": props, "geometry": country["geometry"]})
+        row = index.get(iso3)
+        if mode == "baseline":
+            assert row is not None
+            props = BaselineLayerProperties(
+                iso3=iso3,
+                name=country["name"],
+                layer_id=layer_id,
+                mode="baseline",
+                value=row.value,
+                top_driver=row.top_driver,
+                confidence=row.confidence,
+                source_count=row.source_count,
+                staleness_days=row.staleness_days,
+                as_of=datetime(2026, 3, 5).date(),
+                data_version=DATA_VERSION,
+            )
+        else:
+            assert row is not None
+            props = ScenarioLayerProperties(
+                iso3=iso3,
+                name=country["name"],
+                layer_id=layer_id,
+                mode="scenario",
+                baseline=float(row["baseline"]),
+                scenario=float(row["scenario"]),
+                delta=float(row["delta"]),
+                top_driver=str(row["top_driver"]),
+                confidence=float(row["confidence"]),
+                source_count=int(row["source_count"]),
+                staleness_days=int(row["staleness_days"]),
+                as_of=datetime(2026, 3, 5).date(),
+                data_version=DATA_VERSION,
+            )
+        features.append(
+            LayerFeature(
+                id=iso3,
+                properties=props.model_dump(mode="json"),
+                geometry=country["geometry"],
+            ).model_dump(mode="json")
+        )
 
-    return {
-        "layer_id": layer_id,
-        "mode": mode,
-        "params": {
+    response = LayerViewResponse(
+        layer_id=layer_id,
+        mode=mode,
+        as_of=datetime(2026, 3, 5).date(),
+        data_version=DATA_VERSION,
+        params={
             "dalio_stage": dalio_stage,
             "shock_severity": shock_severity,
             "solar_storm_severity": solar_storm_severity,
             "chokepoint_closure": chokepoint_closure,
         },
-        "feature_collection": {"type": "FeatureCollection", "features": features},
-    }
+        feature_collection={"type": "FeatureCollection", "features": features},
+    )
+    return response.model_dump(mode="json")
 
 
 @app.get("/v1/world/geojson")
 def get_world_geojson() -> dict:
-    features = []
-    for iso3, country in COUNTRIES.items():
-        features.append(
+    return {
+        "type": "FeatureCollection",
+        "features": [
             {
                 "type": "Feature",
                 "id": iso3,
@@ -134,11 +194,13 @@ def get_world_geojson() -> dict:
                     "iso3": iso3,
                     "name": country["name"],
                     "region_group": country["region_group"],
+                    **api_meta(),
                 },
                 "geometry": country["geometry"],
             }
-        )
-    return {"type": "FeatureCollection", "features": features}
+            for iso3, country in COUNTRIES.items()
+        ],
+    }
 
 
 @app.get("/v1/chokepoints")
@@ -149,7 +211,11 @@ def get_chokepoints() -> dict:
             {
                 "type": "Feature",
                 "id": chokepoint["id"],
-                "properties": {"name": chokepoint["name"], "risk_level": chokepoint["risk_level"]},
+                "properties": {
+                    "name": chokepoint["name"],
+                    "risk_level": chokepoint["risk_level"],
+                    **api_meta(),
+                },
                 "geometry": chokepoint["geometry"],
             }
             for chokepoint in CHOKEPOINTS
@@ -167,11 +233,14 @@ def get_country_summary(
     iso3 = iso3.upper()
     if iso3 not in COUNTRIES:
         raise HTTPException(status_code=404, detail=f"Unknown country ISO3: {iso3}")
-    summary = rrfi_for_country(
-        iso3,
-        solar_storm_severity=solar_storm_severity,
-        chokepoint_closure=chokepoint_closure,
-    )
+    try:
+        summary = rrfi_for_country(
+            iso3,
+            solar_storm_severity=solar_storm_severity,
+            chokepoint_closure=chokepoint_closure,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     payload = summary.model_dump(mode="json")
     payload["requested_date"] = date
     return payload
@@ -179,7 +248,7 @@ def get_country_summary(
 
 @app.get("/v1/layers")
 def get_layers() -> dict:
-    return {"layers": [layer.model_dump() for layer in LAYERS]}
+    return {"layers": [layer.model_dump() for layer in LAYERS], **api_meta()}
 
 
 @app.get("/v1/world/beauty-spotlight")
@@ -193,7 +262,8 @@ def get_layer_tiles(layer_id: str, z: int, x: int, y: int) -> dict:
         "layer_id": layer_id,
         "tile": {"z": z, "x": x, "y": y},
         "url": f"https://example.local/pmtiles/{layer_id}/{z}/{x}/{y}.mvt",
-        "note": "MVP placeholder URL for precomputed PMTiles.",
+        "note": "Reserved placeholder URL for future precomputed PMTiles.",
+        **api_meta(),
     }
 
 
@@ -203,52 +273,85 @@ def get_nowcast() -> dict:
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "state": nowcast.model_dump(),
+        **api_meta(),
     }
 
 
 @app.get("/v1/ecc")
 def get_ecc() -> dict:
     results = [ECCCountrySignal(geo_id=geo_id, **signals).model_dump() for geo_id, signals in ECC_TOPIC_DATA.items()]
-    return {"results": results}
+    return {"results": results, **api_meta()}
 
 
 @app.post("/v1/alerts")
 def post_alert_subscription(payload: dict) -> dict:
-    alert = AlertSubscription(
-        id=str(uuid4()),
-        target_type=payload["target_type"],
-        target_value=payload["target_value"],
-        threshold=payload.get("threshold"),
-        created_at=datetime.now(timezone.utc),
-    )
-    _ALERTS[alert.id] = alert.model_dump(mode="json")
-    return _ALERTS[alert.id]
+    try:
+        alert = storage.save_alert(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return alert.model_dump(mode="json")
 
 
 @app.get("/v1/alerts")
 def get_alert_subscriptions() -> dict:
-    return {"alerts": list(_ALERTS.values())}
+    return {"alerts": [alert.model_dump(mode="json") for alert in storage.list_alerts()], **api_meta()}
+
+
+@app.get("/v1/watchlists")
+def get_watchlists() -> dict:
+    return {"watchlists": [watchlist.model_dump(mode="json") for watchlist in storage.list_watchlists()], **api_meta()}
+
+
+@app.post("/v1/watchlists")
+def post_watchlist(payload: dict) -> dict:
+    try:
+        watchlist = storage.save_watchlist(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return watchlist.model_dump(mode="json")
+
+
+@app.get("/v1/scenarios")
+def get_scenarios() -> dict:
+    return {"scenarios": [scenario.model_dump(mode="json") for scenario in storage.list_scenarios()], **api_meta()}
+
+
+@app.post("/v1/scenarios")
+def post_scenario_definition(payload: dict) -> dict:
+    try:
+        scenario = storage.save_scenario(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return scenario.model_dump(mode="json")
+
+
+@app.get("/v1/briefs/daily")
+def get_daily_brief(scenario_id: str | None = None) -> dict:
+    scenario = storage.get_scenario(scenario_id) if scenario_id else None
+    brief = build_daily_brief(watchlists=storage.list_watchlists(), scenario=scenario)
+    return brief.model_dump(mode="json")
 
 
 @app.post("/v1/scenario/run")
 def post_scenario_run(request: ScenarioRunRequest) -> dict:
-    dalio_stage = int(request.params.get("dalio_stage", 5))
-    shock_severity = float(request.params.get("shock_severity", 0.5))
-    chokepoint_closure = float(request.params.get("chokepoint_closure", 0.0))
-    solar_storm_severity = float(request.params.get("solar_storm_severity", 0.0))
-    scenario = run_dalio_scenario(
-        dalio_stage,
-        shock_severity,
-        chokepoint_closure=chokepoint_closure,
-        solar_storm_severity=solar_storm_severity,
-    )
-    _SCENARIOS[scenario.scenario_id] = scenario.model_dump(mode="json")
-    return {"scenario_id": scenario.scenario_id}
+    try:
+        scenario = storage.save_scenario({"name": request.name, "params": request.params})
+        scenario_run = run_dalio_scenario(
+            int(request.params.get("dalio_stage", 5)),
+            float(request.params.get("shock_severity", 0.5)),
+            chokepoint_closure=float(request.params.get("chokepoint_closure", 0.0)),
+            solar_storm_severity=float(request.params.get("solar_storm_severity", 0.0)),
+            scenario_id=scenario.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    storage.save_scenario_run(scenario.id, scenario_run.model_dump(mode="json"))
+    return {"scenario_id": scenario.id}
 
 
 @app.get("/v1/scenario/{scenario_id}/result")
 def get_scenario_result(scenario_id: str) -> dict:
-    result = _SCENARIOS.get(scenario_id)
+    result = storage.get_scenario_run(scenario_id)
     if not result:
         raise HTTPException(status_code=404, detail="scenario_id not found")
     return result
