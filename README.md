@@ -1,16 +1,18 @@
 # Dimentria (MVP HUD + RRFI Engine)
 
-This repository contains a Codex-ready MVP for the Dimentria "Fragility Tracker HUD": a map-first fragility system with RRFI scoring, law-layer multipliers, wartime constraints, and scenario simulation.
+This repository contains a Codex-ready MVP for the Dimentria Analyst Desk: a map-first fragility system with RRFI scoring, scenario comparison, persisted analyst objects, and a lightweight operator HUD.
 
 ## Implemented in this scaffold
 
 - Canonical RRFI-oriented data contracts (metrics, pillars, law multipliers, scenario outputs).
-- Seed country dataset placeholders with coarse geometry for map rendering.
+- Seeded strategic-country dataset with coarse geometry for map rendering.
 - RRFI scoring engine with:
+  - metric snapshot loading,
   - metric normalization,
   - weighted pillar aggregation,
   - law-layer multipliers,
   - wartime multiplier heuristic,
+  - score provenance,
   - explanation graph payload.
 - FastAPI endpoints:
   - `GET /v1/world/rrfi`
@@ -25,9 +27,14 @@ This repository contains a Codex-ready MVP for the Dimentria "Fragility Tracker 
   - `GET /v1/ecc`
   - `POST /v1/alerts`
   - `GET /v1/alerts`
+  - `GET /v1/watchlists`
+  - `POST /v1/watchlists`
+  - `GET /v1/scenarios`
+  - `POST /v1/scenarios`
+  - `GET /v1/briefs/daily`
   - `POST /v1/scenario/run`
   - `GET /v1/scenario/{scenario_id}/result`
-- Minimal HUD frontend at `GET /hud/`.
+- Analyst Desk HUD frontend at `GET /hud/`.
 - Tile cache build placeholder script: `scripts/build_tiles.py`.
 
 ## Quickstart
@@ -61,4 +68,4 @@ pytest
 - `PRODUCT_DOC.md`
 - `TECH_SPEC.md`
 - `CHANGELOG.md`
-- `SCENARIO_LAYER_COMPARE_SPEC.md`
+- `ANALYST_DESK_SPEC.md`
