@@ -61,11 +61,39 @@ class CountrySummary(BaseModel):
     warnings: list[str]
 
 
+class CountryFeature(BaseModel):
+    iso3: str
+    name: str
+    region_group: str
+    geometry: dict[str, Any]
+
+
 class LayerMetadata(BaseModel):
     layer_id: str
     name: str
     unit: str
     legend: str
+
+
+class NowcastState(BaseModel):
+    solar_storm_watch: str
+    chokepoint_tension: str
+    summary: str
+
+
+class ECCCountrySignal(BaseModel):
+    geo_id: str
+    ecc_bull_intensity: float
+    ecc_bear_intensity: float
+    top_topics: list[str]
+
+
+class AlertSubscription(BaseModel):
+    id: str
+    target_type: Literal["country", "region", "chokepoint", "topic"]
+    target_value: str
+    threshold: float | None = None
+    created_at: datetime
 
 
 class ScenarioRunRequest(BaseModel):
@@ -78,4 +106,20 @@ class ScenarioRunResult(BaseModel):
     created_at: datetime
     params_json: dict[str, Any]
     deltas: dict[str, float]
+    scenario_scores: dict[str, float]
     explanations: dict[str, str]
+
+
+class BeautySpotlightCard(BaseModel):
+    iso3: str
+    country: str
+    rrfi_score: float
+    resilience_tier: Literal["fortress", "stable", "watch", "critical"]
+    headline: str
+    vibe: str
+    accent_hex: str
+
+
+class BeautySpotlightResponse(BaseModel):
+    generated_at: datetime
+    cards: list[BeautySpotlightCard]
