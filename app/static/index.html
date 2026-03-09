@@ -5,243 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dimentria Analyst Desk</title>
     <style>
-      :root {
-        --bg: #09111d;
-        --panel: rgba(9, 17, 29, 0.88);
-        --panel-2: rgba(16, 28, 46, 0.92);
-        --line: #224161;
-        --text: #e7eef7;
-        --muted: #8fa8c2;
-        --accent: #5eead4;
-        --accent-2: #f59e0b;
-        --risk: #dc2626;
-        --warn: #f97316;
-        --ok: #16a34a;
-      }
-
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: "Segoe UI", "Helvetica Neue", sans-serif;
-        color: var(--text);
-        background:
-          radial-gradient(circle at top left, rgba(94, 234, 212, 0.12), transparent 25%),
-          radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.12), transparent 25%),
-          linear-gradient(180deg, #040a12, var(--bg));
-      }
-      .shell {
-        min-height: 100vh;
-        display: grid;
-        grid-template-columns: 300px 1fr 360px;
-      }
-      .rail, .side {
-        background: var(--panel);
-        backdrop-filter: blur(12px);
-        border-right: 1px solid var(--line);
-        padding: 18px 16px;
-      }
-      .side {
-        border-right: none;
-        border-left: 1px solid var(--line);
-      }
-      .center {
-        display: grid;
-        grid-template-rows: auto 1fr auto;
-        min-height: 100vh;
-      }
-      .topbar {
-        padding: 18px 20px 10px;
-        border-bottom: 1px solid var(--line);
-      }
-      h1, h2, h3, p { margin: 0; }
-      h1 {
-        font-size: 28px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-      }
-      .subtitle {
-        color: var(--muted);
-        margin-top: 6px;
-        font-size: 13px;
-      }
-      .section-title {
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 10px;
-      }
-      .stack {
-        display: grid;
-        gap: 14px;
-      }
-      .card {
-        background: var(--panel-2);
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 14px;
-      }
-      .kpis {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 14px;
-      }
-      .kpi-value {
-        margin-top: 6px;
-        font-size: 24px;
-        font-weight: 700;
-      }
-      .kpi-label {
-        color: var(--muted);
-        font-size: 12px;
-        text-transform: uppercase;
-      }
-      .main-grid {
-        display: grid;
-        grid-template-columns: 1fr 300px;
-        gap: 14px;
-        padding: 16px 18px;
-        min-height: 0;
-      }
-      .map-card {
-        position: relative;
-        overflow: hidden;
-      }
-      .map-stage {
-        height: 100%;
-        min-height: 520px;
-        border-radius: 12px;
-        background:
-          linear-gradient(180deg, rgba(10, 20, 34, 0.7), rgba(6, 14, 24, 0.95)),
-          radial-gradient(circle at 30% 20%, rgba(94, 234, 212, 0.08), transparent 30%);
-        border: 1px solid var(--line);
-        position: relative;
-      }
-      #mapSvg {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
-      .legend {
-        position: absolute;
-        right: 16px;
-        bottom: 16px;
-        width: 220px;
-      }
-      .scale {
-        height: 10px;
-        border-radius: 999px;
-        margin: 8px 0 6px;
-        background: linear-gradient(90deg, #7f1d1d, #b45309, #eab308, #16a34a);
-      }
-      .scale.delta {
-        background: linear-gradient(90deg, #7f1d1d, #dc2626, #475569, #16a34a, #064e3b);
-      }
-      .mini {
-        color: var(--muted);
-        font-size: 12px;
-      }
-      .control-grid {
-        display: grid;
-        gap: 10px;
-      }
-      label {
-        display: block;
-        margin-bottom: 4px;
-        color: var(--muted);
-        font-size: 12px;
-      }
-      input, select, button {
-        width: 100%;
-        border-radius: 10px;
-        border: 1px solid var(--line);
-        background: #0b1728;
-        color: var(--text);
-        padding: 10px 12px;
-      }
-      input[type="range"] {
-        padding: 0;
-      }
-      button {
-        cursor: pointer;
-        background: linear-gradient(90deg, #0f766e, #0ea5a4);
-        border: none;
-        font-weight: 700;
-      }
-      .btn-secondary {
-        background: linear-gradient(90deg, #1d4ed8, #2563eb);
-      }
-      .list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: grid;
-        gap: 8px;
-      }
-      .list li {
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 10px;
-        background: rgba(7, 15, 25, 0.6);
-      }
-      .row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
-      .mono {
-        font-family: Consolas, monospace;
-      }
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 3px 8px;
-        border-radius: 999px;
-        font-size: 11px;
-        border: 1px solid var(--line);
-        color: var(--muted);
-      }
-      .danger { color: #fecaca; background: rgba(127, 29, 29, 0.35); }
-      .positive { color: #bbf7d0; background: rgba(20, 83, 45, 0.35); }
-      .note {
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.5;
-      }
-      pre {
-        margin: 0;
-        white-space: pre-wrap;
-        font-size: 12px;
-        line-height: 1.45;
-      }
-      @media (max-width: 1200px) {
-        .shell {
-          grid-template-columns: 280px 1fr;
-        }
-        .side {
-          grid-column: 1 / -1;
-          border-left: none;
-          border-top: 1px solid var(--line);
-        }
-      }
-      @media (max-width: 900px) {
-        .shell {
-          grid-template-columns: 1fr;
-        }
-        .rail {
-          border-right: none;
-          border-bottom: 1px solid var(--line);
-        }
-        .main-grid {
-          grid-template-columns: 1fr;
-        }
-        .kpis {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
+      :root { --bg:#041018; --panel:#0a1624ee; --line:#33536bcc; --text:#dff8ff; --muted:#88a9bf; --cyan:#3fd6ff; --teal:#29f0c0; --amber:#ffbe27; --red:#ff4d6d; --green:#1dd785; }
+      * { box-sizing:border-box; }
+      body { margin:0; font-family:"Segoe UI","Helvetica Neue",sans-serif; color:var(--text); background:radial-gradient(circle at 18% 16%, rgba(63,214,255,.12), transparent 25%), radial-gradient(circle at 82% 84%, rgba(255,190,39,.12), transparent 22%), linear-gradient(180deg,#02090f,var(--bg)); }
+      body::before { content:""; position:fixed; inset:0; pointer-events:none; background-image:linear-gradient(rgba(63,214,255,.04) 1px, transparent 1px),linear-gradient(90deg, rgba(63,214,255,.04) 1px, transparent 1px); background-size:28px 28px; mask-image:linear-gradient(180deg,rgba(0,0,0,.75),transparent 95%); }
+      .shell { min-height:100vh; display:grid; grid-template-columns:290px 1fr 340px; }
+      .rail,.side { padding:18px 16px; background:var(--panel); backdrop-filter:blur(14px); border-right:1px solid var(--line); }
+      .side { border-right:none; border-left:1px solid var(--line); }
+      .center { min-height:100vh; display:grid; grid-template-rows:auto auto 1fr auto; }
+      .topbar { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:center; padding:18px 20px 10px; }
+      .title { margin:0; font-size:28px; text-transform:uppercase; letter-spacing:.08em; }
+      .subtitle,.note { color:var(--muted); }
+      .subtitle { margin-top:6px; font-size:13px; }
+      .section { margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.14em; color:var(--muted); }
+      .stack { display:grid; gap:14px; }
+      .card { position:relative; border:1px solid var(--line); border-radius:16px; background:linear-gradient(180deg, rgba(11,28,41,.88), rgba(6,16,27,.92)); box-shadow:inset 0 0 34px rgba(63,214,255,.05); overflow:hidden; }
+      .card::after { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(135deg, rgba(63,214,255,.06), transparent 30%); }
+      .body { position:relative; z-index:1; padding:14px; }
+      .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; padding:0 20px 12px; }
+      .kpi-value { margin-top:8px; font-size:26px; font-weight:700; }
+      .kpi-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+      .content { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:14px; padding:0 20px 14px; min-height:0; }
+      .analytics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; padding:0 20px 20px; }
+      .controls, .list { display:grid; gap:10px; }
+      .list { list-style:none; margin:0; padding:0; }
+      .list li { display:grid; gap:4px; padding:10px; border-radius:12px; border:1px solid rgba(65,114,150,.28); background:rgba(4,14,24,.5); }
+      label { display:block; margin-bottom:4px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+      input,select,button { width:100%; border-radius:12px; border:1px solid var(--line); background:#0a1624; color:var(--text); padding:10px 12px; }
+      input[type="range"] { padding:0; accent-color:var(--cyan); }
+      button { cursor:pointer; border:none; font-weight:700; }
+      .btn-primary { background:linear-gradient(90deg,#0891b2,#22d3ee); color:#021014; }
+      .btn-secondary { background:linear-gradient(90deg,#1d4ed8,#3b82f6); }
+      .btn-ghost { background:linear-gradient(90deg,#0f3c38,#145a54); }
+      .meta-pill,.chip { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); color:var(--muted); font-size:11px; }
+      .chip { padding:4px 8px; }
+      .delta-neg { color:#ffd4dc; background:rgba(127,29,29,.28); }
+      .delta-pos { color:#d3ffe9; background:rgba(20,83,45,.28); }
+      .status-dot { width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 10px rgba(41,240,192,.8); }
+      .svg-wrap { min-height:150px; }
+      .svg-wrap svg, #mapSvg { width:100%; height:100%; display:block; }
+      .map-frame { position:relative; min-height:520px; background:radial-gradient(circle at 50% 40%, rgba(41,240,192,.08), transparent 32%), linear-gradient(180deg, rgba(5,13,22,.76), rgba(5,12,20,.96)); }
+      .map-overlay { position:absolute; inset:14px 14px auto 14px; display:grid; grid-template-columns:1.1fr .9fr; gap:12px; pointer-events:none; }
+      .overlay-box,.legend { border-radius:12px; border:1px solid rgba(65,114,150,.32); background:rgba(5,15,24,.68); }
+      .overlay-box { padding:10px 12px; }
+      .legend { position:absolute; right:14px; bottom:14px; width:220px; }
+      .scale { margin-top:8px; height:12px; border-radius:999px; background:linear-gradient(90deg,#7f1d1d,#b45309,#eab308,#16a34a); }
+      .scale.delta { background:linear-gradient(90deg,#7f1d1d,#ff4d6d,#425a6d,#1dd785,#0d8b63); }
+      .gauge-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+      .meter { display:grid; grid-template-columns:92px 1fr 44px; gap:8px; align-items:center; margin-top:8px; }
+      .meter-track { height:10px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; }
+      .watch-grid { display:grid; gap:8px; }
+      .watch-row { display:grid; grid-template-columns:84px 1fr 44px; gap:8px; align-items:center; }
+      .watch-cells { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+      .watch-cell { height:18px; border-radius:4px; border:1px solid rgba(255,255,255,.05); }
+      .brief-grid { display:grid; gap:8px; }
+      .brief-item { padding:10px; border-radius:12px; border:1px solid rgba(65,114,150,.28); background:rgba(6,15,24,.54); }
+      .big { font-size:34px; font-weight:800; color:var(--teal); }
+      .selection-name { font-size:22px; font-weight:700; }
+      @media (max-width:1320px) { .shell { grid-template-columns:280px 1fr; } .side { grid-column:1 / -1; border-left:none; border-top:1px solid var(--line); } }
+      @media (max-width:980px) { .shell { grid-template-columns:1fr; } .rail { border-right:none; border-bottom:1px solid var(--line); } .content,.analytics { grid-template-columns:1fr; } .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .map-overlay { grid-template-columns:1fr; } }
     </style>
   </head>
   <body>
@@ -249,368 +71,114 @@
       <aside class="rail">
         <div class="stack">
           <div>
-            <h1>Dimentria</h1>
-            <p class="subtitle">Fragility workstation for geopolitical analysts.</p>
+            <h1 class="title">Dimentria</h1>
+            <p class="subtitle">Fragility workstation. Show the world state, do not narrate it.</p>
           </div>
-
-          <section class="card">
-            <div class="section-title">Scenario Console</div>
-            <div class="control-grid">
-              <div>
-                <label for="layerSel">Primary layer</label>
-                <select id="layerSel">
-                  <option value="rrfi">RRFI</option>
-                  <option value="water">Water</option>
-                  <option value="food">Food</option>
-                  <option value="debt">Debt</option>
-                  <option value="military">Military</option>
-                  <option value="geography">Geography</option>
-                </select>
-              </div>
-              <div>
-                <label for="modeSel">View mode</label>
-                <select id="modeSel">
-                  <option value="baseline">Baseline</option>
-                  <option value="scenario">Scenario delta</option>
-                </select>
-              </div>
-              <div>
-                <label for="presetSel">Scenario preset</label>
-                <select id="presetSel"></select>
-              </div>
-              <div>
-                <label for="stage">Dalio stage <span id="stageOut" class="mono">5</span></label>
-                <input id="stage" type="range" min="1" max="7" value="5" />
-              </div>
-              <div>
-                <label for="shock">Shock severity <span id="shockOut" class="mono">0.5</span></label>
-                <input id="shock" type="range" min="0" max="1" step="0.1" value="0.5" />
-              </div>
-              <div>
-                <label for="choke">Chokepoint closure <span id="chokeOut" class="mono">0.0</span></label>
-                <input id="choke" type="range" min="0" max="1" step="0.1" value="0" />
-              </div>
-              <div>
-                <label for="solar">Solar severity <span id="solarOut" class="mono">0.0</span></label>
-                <input id="solar" type="range" min="0" max="1" step="0.1" value="0" />
-              </div>
-              <button id="refresh">Refresh map</button>
-              <button id="saveScenario" class="btn-secondary">Save current scenario</button>
+          <section class="card"><div class="body">
+            <p class="section">Scenario Console</p>
+            <div class="controls">
+              <div><label for="layerSel">Primary layer</label><select id="layerSel"><option value="rrfi">RRFI</option><option value="water">Water</option><option value="food">Food</option><option value="debt">Debt</option><option value="military">Military</option><option value="geography">Geography</option></select></div>
+              <div><label for="modeSel">View mode</label><select id="modeSel"><option value="baseline">Baseline</option><option value="scenario">Scenario delta</option></select></div>
+              <div><label for="presetSel">Saved scenario</label><select id="presetSel"></select></div>
+              <div><label for="stage">Dalio stage <span id="stageOut">5</span></label><input id="stage" type="range" min="1" max="7" value="5" /></div>
+              <div><label for="shock">Shock <span id="shockOut">0.5</span></label><input id="shock" type="range" min="0" max="1" step="0.1" value="0.5" /></div>
+              <div><label for="choke">Closure <span id="chokeOut">0.0</span></label><input id="choke" type="range" min="0" max="1" step="0.1" value="0" /></div>
+              <div><label for="solar">Solar <span id="solarOut">0.0</span></label><input id="solar" type="range" min="0" max="1" step="0.1" value="0" /></div>
+              <button id="refresh" class="btn-primary">Render current state</button>
+              <button id="saveScenario" class="btn-secondary">Save scenario</button>
+              <button id="runSnapshot" class="btn-ghost">Write snapshot</button>
             </div>
-          </section>
-
-          <section class="card">
-            <div class="section-title">Watchlists</div>
-            <ul id="watchlists" class="list"></ul>
-          </section>
-
-          <section class="card">
-            <div class="section-title">Nowcast</div>
-            <pre id="nowcast">Loading...</pre>
-          </section>
+          </div></section>
+          <section class="card"><div class="body">
+            <p class="section">Nowcast Pulse</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div><div class="big" id="solarBadge">MOD</div><div class="note">Solar watch</div></div>
+              <div><div class="big" id="chokeBadge">ELEV</div><div class="note">Chokepoint tension</div></div>
+            </div>
+            <p class="note" id="nowcastSummary" style="margin-top:12px;">Loading nowcast...</p>
+          </div></section>
+          <section class="card"><div class="body">
+            <p class="section">Watchlist Pulse</p>
+            <div id="watchPulse" class="watch-grid"></div>
+          </div></section>
         </div>
       </aside>
-
       <main class="center">
         <div class="topbar">
-          <div class="row">
-            <div>
-              <h2>Operator Surface</h2>
-              <p class="subtitle">Track world state, stress-test scenarios, and investigate movers without leaving the map.</p>
-            </div>
-            <div class="badge" id="metaBadge">loading</div>
-          </div>
-          <div class="kpis" id="kpis"></div>
+          <div><h2 style="margin:0; font-size:24px;">Operator Surface</h2><p class="subtitle">Maps, charts, and touch feedback around the same fragility model.</p></div>
+          <div class="meta-pill"><span class="status-dot"></span><span id="metaBadge">Loading</span></div>
         </div>
-
-        <div class="main-grid">
-          <section class="map-card">
-            <div class="map-stage">
-              <svg id="mapSvg" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid meet"></svg>
-              <div class="card legend">
-                <div class="section-title" id="legendTitle">RRFI baseline</div>
-                <div id="legendScale" class="scale"></div>
-                <div class="mini" id="legendRange">0 -> 100 score</div>
-                <div class="mini" id="hoverMeta">Hover a country for live signal.</div>
-              </div>
-            </div>
-          </section>
-
+        <div class="kpis" id="kpis"></div>
+        <div class="content">
           <section class="stack">
-            <section class="card">
-              <div class="section-title">Hot Deteriorations</div>
-              <ul id="movers" class="list"></ul>
-            </section>
-            <section class="card">
-              <div class="section-title">Daily Brief</div>
-              <pre id="brief">Loading brief...</pre>
-            </section>
+            <section class="card"><div class="body"><p class="section">World Pulse</p><div class="svg-wrap" style="height:180px;" id="worldTrend"></div></div></section>
+            <section class="card"><div class="map-frame">
+              <div class="map-overlay">
+                <div class="overlay-box"><div class="section">Selected signal</div><div style="font-size:22px; font-weight:700; color:var(--cyan);" id="selectedQuick">RRFI Baseline</div><div class="note" id="hoverMeta">Hover the map or click a country to lock drilldown.</div></div>
+                <div class="overlay-box"><div class="section">Stress lane</div><div class="svg-wrap" style="height:78px;" id="scenarioLanes"></div></div>
+              </div>
+              <svg id="mapSvg" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid meet"></svg>
+              <div class="legend"><div class="body" style="padding:10px 12px;"><div class="section" id="legendTitle">RRFI baseline</div><div id="legendScale" class="scale"></div><div class="note" id="legendRange" style="margin-top:8px;">0 -> 100 score</div></div></div>
+            </div></section>
+          </section>
+          <section class="stack">
+            <section class="card"><div class="body"><p class="section">1D Movers</p><div class="svg-wrap" style="height:180px;" id="movers1d"></div></div></section>
+            <section class="card"><div class="body"><p class="section">7D Movers</p><div class="svg-wrap" style="height:180px;" id="movers7d"></div></div></section>
+            <section class="card"><div class="body"><p class="section">Scenario Pressure</p><div class="svg-wrap" style="height:180px;" id="scenarioPressure"></div></div></section>
           </section>
         </div>
-
-        <div style="padding: 0 18px 18px;">
-          <section class="card">
-            <div class="section-title">Country Drilldown</div>
-            <pre id="selection">Click a country to inspect decomposition, warnings, and source freshness.</pre>
-          </section>
+        <div class="analytics">
+          <section class="card"><div class="body">
+            <p class="section">Country Trend</p><div class="selection-name" id="selectionName">India</div><div class="note" id="selectionMeta">Click any country on the map</div>
+            <div class="svg-wrap" style="height:170px; margin-top:10px;" id="countryTrend"></div><div id="driverMeters"></div>
+          </div></section>
+          <section class="card"><div class="body">
+            <p class="section">Score Rings</p><div class="gauge-grid"><div class="svg-wrap" style="height:170px;" id="rrfiGauge"></div><div class="svg-wrap" style="height:170px;" id="confidenceGauge"></div></div>
+            <div class="note" id="selectionWarnings" style="margin-top:12px;">Warnings will appear here after selecting a country.</div>
+          </div></section>
+          <section class="card"><div class="body"><p class="section">Pillar Radar</p><div class="svg-wrap" style="height:220px;" id="pillarRadar"></div></div></section>
         </div>
       </main>
-
       <aside class="side">
         <div class="stack">
-          <section class="card">
-            <div class="section-title">Saved Scenarios</div>
-            <ul id="scenarios" class="list"></ul>
-          </section>
-          <section class="card">
-            <div class="section-title">Saved Alerts</div>
-            <ul id="alerts" class="list"></ul>
-          </section>
-          <section class="card">
-            <div class="section-title">Move Explanation</div>
-            <div id="explanation" class="note">Scenario deltas describe change from baseline under the current stress regime.</div>
-          </section>
+          <section class="card"><div class="body"><p class="section">Saved Scenarios</p><ul class="list" id="scenarioList"></ul></div></section>
+          <section class="card"><div class="body"><p class="section">Saved Alerts</p><ul class="list" id="alertList"></ul></div></section>
+          <section class="card"><div class="body"><p class="section">Daily Brief</p><div id="briefPanel" class="brief-grid"></div></div></section>
         </div>
       </aside>
     </div>
-
     <script>
+      const state = { world:null, worldHistory:null, movers1d:null, movers7d:null, layerData:null, watchlists:[], scenarios:[], alerts:[], brief:null, selectedIso3:"IND", selectedSummary:null, selectedHistory:null };
       const svg = document.getElementById("mapSvg");
-      const selection = document.getElementById("selection");
-      const hoverMeta = document.getElementById("hoverMeta");
-      let currentLayerData = null;
-
-      function project([lon, lat]) {
-        const x = ((lon + 180) / 360) * 1200;
-        const y = ((90 - lat) / 180) * 600;
-        return [x, y];
-      }
-
-      function colorForValue(value, mode) {
-        if (mode === "scenario") {
-          if (value < -15) return "#7f1d1d";
-          if (value < -5) return "#dc2626";
-          if (value < 2) return "#475569";
-          if (value < 10) return "#16a34a";
-          return "#064e3b";
-        }
-        if (value < 35) return "#7f1d1d";
-        if (value < 50) return "#b45309";
-        if (value < 70) return "#eab308";
-        return "#16a34a";
-      }
-
-      function getParams() {
-        return {
-          layer_id: document.getElementById("layerSel").value,
-          mode: document.getElementById("modeSel").value,
-          dalio_stage: document.getElementById("stage").value,
-          shock_severity: document.getElementById("shock").value,
-          chokepoint_closure: document.getElementById("choke").value,
-          solar_storm_severity: document.getElementById("solar").value
-        };
-      }
-
-      function updateOutputs() {
-        ["stage", "shock", "choke", "solar"].forEach((id) => {
-          document.getElementById(id + "Out").textContent = document.getElementById(id).value;
-        });
-      }
-
-      function renderMap(features, mode) {
-        svg.innerHTML = '<rect x="0" y="0" width="1200" height="600" fill="#07111d" />';
-        features.forEach((feature) => {
-          const coords = feature.geometry.coordinates[0].map(project);
-          const d = `M ${coords.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(" L ")} Z`;
-          const value = mode === "scenario" ? feature.properties.delta : feature.properties.value;
-          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          path.setAttribute("d", d);
-          path.setAttribute("fill", colorForValue(value ?? 0, mode));
-          path.setAttribute("stroke", "#16304a");
-          path.setAttribute("stroke-width", "1.5");
-          path.style.cursor = "pointer";
-          path.addEventListener("mouseenter", () => {
-            hoverMeta.textContent = `${feature.properties.name} | ${mode === "scenario" ? "delta" : "score"} ${value} | conf ${feature.properties.confidence}`;
-          });
-          path.addEventListener("click", async () => {
-            const params = new URLSearchParams({
-              solar_storm_severity: document.getElementById("solar").value,
-              chokepoint_closure: document.getElementById("choke").value
-            });
-            const response = await fetch(`/v1/country/${feature.properties.iso3}/summary?${params.toString()}`);
-            const data = await response.json();
-            document.getElementById("explanation").textContent = [
-              `Top drivers: ${data.top_drivers.join(", ")}`,
-              `Warnings: ${data.warnings.length ? data.warnings.join(" | ") : "none"}`,
-              `Source freshness: ${data.provenance.staleness_days} days`,
-              `Composite confidence: ${data.provenance.confidence}`
-            ].join("\n");
-            selection.textContent = JSON.stringify({
-              country: data.name,
-              rrfi: data.rrfi.final_score,
-              top_drivers: data.top_drivers,
-              warnings: data.warnings,
-              provenance: {
-                as_of: data.provenance.as_of,
-                data_version: data.provenance.data_version,
-                confidence: data.provenance.confidence,
-                source_count: data.provenance.source_count,
-                staleness_days: data.provenance.staleness_days
-              },
-              explanation_graph: data.rrfi.explanation_graph
-            }, null, 2);
-          });
-          svg.appendChild(path);
-        });
-      }
-
-      function renderKpis(world) {
-        const scores = world.results.map((row) => row.rrfi_score);
-        const mean = scores.reduce((acc, score) => acc + score, 0) / Math.max(scores.length, 1);
-        const fragile = world.results.filter((row) => row.rrfi_score < 45).length;
-        const stale = world.results.filter((row) => row.staleness_days > 0).length;
-        const kpis = [
-          { label: "Countries tracked", value: world.results.length },
-          { label: "Mean RRFI", value: mean.toFixed(1) },
-          { label: "Fragile set", value: fragile },
-          { label: "Freshness checks", value: stale }
-        ];
-        document.getElementById("kpis").innerHTML = kpis.map((kpi) => `
-          <article class="card">
-            <div class="kpi-label">${kpi.label}</div>
-            <div class="kpi-value">${kpi.value}</div>
-          </article>
-        `).join("");
-      }
-
-      function renderMovers(features) {
-        const rows = [...features]
-          .filter((feature) => feature.properties.mode === "scenario")
-          .sort((a, b) => a.properties.delta - b.properties.delta)
-          .slice(0, 6);
-        document.getElementById("movers").innerHTML = rows.map((row) => `
-          <li>
-            <div class="row">
-              <strong>${row.properties.name}</strong>
-              <span class="badge danger">${row.properties.delta}</span>
-            </div>
-            <div class="note">${row.properties.top_driver}</div>
-          </li>
-        `).join("") || '<li class="note">Switch to scenario mode to view top deteriorations.</li>';
-      }
-
-      function renderScenarios(scenarios) {
-        const presetSel = document.getElementById("presetSel");
-        presetSel.innerHTML = scenarios.map((scenario) => `
-          <option value="${scenario.id}">${scenario.name}</option>
-        `).join("");
-        document.getElementById("scenarios").innerHTML = scenarios.map((scenario) => `
-          <li>
-            <div class="row">
-              <strong>${scenario.name}</strong>
-              <span class="badge">${scenario.preset ? "preset" : "saved"}</span>
-            </div>
-            <div class="note">stage ${scenario.params.dalio_stage}, shock ${scenario.params.shock_severity}</div>
-          </li>
-        `).join("");
-      }
-
-      function renderAlerts(alerts) {
-        document.getElementById("alerts").innerHTML = alerts.map((alert) => `
-          <li>
-            <div class="row">
-              <strong>${alert.target_value}</strong>
-              <span class="badge">${alert.status}</span>
-            </div>
-            <div class="note">${alert.target_type} threshold ${alert.threshold ?? "n/a"}</div>
-          </li>
-        `).join("") || '<li class="note">No analyst alerts saved yet.</li>';
-      }
-
-      function renderWatchlists(watchlists) {
-        document.getElementById("watchlists").innerHTML = watchlists.map((watchlist) => `
-          <li>
-            <div class="row">
-              <strong>${watchlist.name}</strong>
-              <span class="badge">${watchlist.items.length} items</span>
-            </div>
-            <div class="note">${watchlist.items.map((item) => item.label).join(", ")}</div>
-          </li>
-        `).join("");
-      }
-
-      function applyScenarioParams(params) {
-        document.getElementById("stage").value = params.dalio_stage;
-        document.getElementById("shock").value = params.shock_severity;
-        document.getElementById("choke").value = params.chokepoint_closure;
-        document.getElementById("solar").value = params.solar_storm_severity;
-        updateOutputs();
-      }
-
-      async function loadStaticPanels() {
-        const [world, nowcast, watchlists, scenarios, alerts, brief] = await Promise.all([
-          fetch("/v1/world/rrfi").then((r) => r.json()),
-          fetch("/v1/nowcast").then((r) => r.json()),
-          fetch("/v1/watchlists").then((r) => r.json()),
-          fetch("/v1/scenarios").then((r) => r.json()),
-          fetch("/v1/alerts").then((r) => r.json()),
-          fetch("/v1/briefs/daily").then((r) => r.json())
-        ]);
-        renderKpis(world);
-        renderWatchlists(watchlists.watchlists);
-        renderScenarios(scenarios.scenarios);
-        renderAlerts(alerts.alerts);
-        document.getElementById("nowcast").textContent = JSON.stringify(nowcast, null, 2);
-        document.getElementById("brief").textContent = JSON.stringify(brief, null, 2);
-        document.getElementById("metaBadge").textContent = `${world.data_version} | as of ${world.as_of}`;
-        if (scenarios.scenarios.length) {
-          applyScenarioParams(scenarios.scenarios[0].params);
-        }
-      }
-
-      async function refreshLayer() {
-        updateOutputs();
-        const params = new URLSearchParams(getParams());
-        const response = await fetch(`/v1/world/layer-view?${params.toString()}`);
-        const data = await response.json();
-        currentLayerData = data;
-        renderMap(data.feature_collection.features, data.mode);
-        renderMovers(data.feature_collection.features);
-        document.getElementById("legendTitle").textContent = `${data.layer_id.toUpperCase()} ${data.mode}`;
-        document.getElementById("legendScale").className = data.mode === "scenario" ? "scale delta" : "scale";
-        document.getElementById("legendRange").textContent = data.mode === "scenario" ? "-30 -> +30 delta" : "0 -> 100 score";
-      }
-
-      async function saveScenario() {
-        const payload = { name: `Desk Scenario ${new Date().toISOString()}`, params: getParams() };
-        await fetch("/v1/scenarios", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const scenarios = await fetch("/v1/scenarios").then((r) => r.json());
-        renderScenarios(scenarios.scenarios);
-      }
-
-      document.getElementById("refresh").addEventListener("click", refreshLayer);
-      document.getElementById("saveScenario").addEventListener("click", saveScenario);
-      document.getElementById("modeSel").addEventListener("change", refreshLayer);
-      document.getElementById("layerSel").addEventListener("change", refreshLayer);
-      document.getElementById("presetSel").addEventListener("change", async (event) => {
-        const scenarios = await fetch("/v1/scenarios").then((r) => r.json());
-        const selected = scenarios.scenarios.find((scenario) => scenario.id === event.target.value);
-        if (selected) {
-          applyScenarioParams(selected.params);
-          document.getElementById("modeSel").value = "scenario";
-          refreshLayer();
-        }
-      });
-
-      loadStaticPanels().then(refreshLayer);
-      setInterval(async () => {
-        const nowcast = await fetch("/v1/nowcast").then((r) => r.json());
-        document.getElementById("nowcast").textContent = JSON.stringify(nowcast, null, 2);
-      }, 30000);
+      const $ = (id) => document.getElementById(id);
+      const project = ([lon, lat]) => [((lon + 180) / 360) * 1200, ((90 - lat) / 180) * 600];
+      const fmt = (v) => `${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(1)}`;
+      const levelColor = (v) => v < 35 ? "#ff4d6d" : v < 50 ? "#ff8c42" : v < 70 ? "#ffbe27" : "#1dd785";
+      const mapColor = (v, mode) => mode === "scenario" ? (v < -15 ? "#7f1d1d" : v < -5 ? "#ff4d6d" : v < 2 ? "#425a6d" : v < 10 ? "#1dd785" : "#0d8b63") : levelColor(v);
+      const params = () => ({ layer_id:$("layerSel").value, mode:$("modeSel").value, dalio_stage:$("stage").value, shock_severity:$("shock").value, chokepoint_closure:$("choke").value, solar_storm_severity:$("solar").value });
+      function updateOutputs(){ ["stage","shock","choke","solar"].forEach((id)=> $(id+"Out").textContent = $(id).value); }
+      function lineChart(points, color="#3fd6ff", width=420, height=170){ if(!points.length) return ""; const vals=points.map(p=>p.value), low=Math.min(...vals), high=Math.max(...vals), range=Math.max(1, high-low), step=width/Math.max(points.length-1,1); const mapped=points.map((p,i)=>({x:i*step, y:height-((p.value-low)/range)*(height-20)-10, label:p.label, value:p.value})); const path=mapped.map((p,i)=>`${i?"L":"M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" "); const area=`M 0 ${height} ${mapped.map(p=>`L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ")} L ${width} ${height} Z`; return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><defs><linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".22"/><stop offset="100%" stop-color="${color}" stop-opacity=".02"/></linearGradient></defs><path d="${area}" fill="url(#lineFill)"></path><path d="${path}" fill="none" stroke="${color}" stroke-width="3"></path>${mapped.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="${color}"></circle><text x="${p.x.toFixed(1)}" y="${height-2}" fill="#88a9bf" font-size="10" text-anchor="middle">${p.label}</text>`).join("")}</svg>`; }
+      function barChart(rows,width=320,height=170){ if(!rows.length) return '<div class="note">No data</div>'; const max=Math.max(...rows.map(r=>Math.abs(r.delta)),1), h=Math.max(18, Math.floor((height-10)/rows.length)-4); return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${rows.map((row,i)=>{ const y=8+i*(h+8), w=(Math.abs(row.delta)/max)*(width-120), color=row.delta<0?"#ff4d6d":"#1dd785"; return `<text x="0" y="${y+12}" fill="#88a9bf" font-size="11">${row.country.slice(0,9)}</text><rect x="95" y="${y}" rx="6" ry="6" width="${width-120}" height="${h}" fill="rgba(255,255,255,.06)"></rect><rect x="95" y="${y}" rx="6" ry="6" width="${w.toFixed(1)}" height="${h}" fill="${color}"></rect><text x="${width-2}" y="${y+12}" fill="${color}" font-size="11" text-anchor="end">${fmt(row.delta)}</text>`; }).join("")}</svg>`; }
+      function gauge(value,label,color,suffix=""){ const v=Math.max(0,Math.min(100,value)), c=2*Math.PI*44, d=c*(v/100); return `<svg viewBox="0 0 140 140"><circle cx="70" cy="70" r="44" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="14"></circle><circle cx="70" cy="70" r="44" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round" stroke-dasharray="${d} ${c}" transform="rotate(-90 70 70)"></circle><circle cx="70" cy="70" r="26" fill="rgba(3,11,18,.9)" stroke="rgba(65,114,150,.28)"></circle><text x="70" y="67" fill="${color}" font-size="24" text-anchor="middle" font-weight="700">${Math.round(v)}</text><text x="70" y="84" fill="#88a9bf" font-size="10" text-anchor="middle">${suffix}</text><text x="70" y="124" fill="#88a9bf" font-size="11" text-anchor="middle">${label}</text></svg>`; }
+      function radar(labels, values){ const size=240, center=120, radius=78, step=(Math.PI*2)/labels.length; const poly=(vals)=> vals.map((v,i)=>{ const a=-Math.PI/2+i*step, r=(v/100)*radius; return `${(center+Math.cos(a)*r).toFixed(1)},${(center+Math.sin(a)*r).toFixed(1)}`; }).join(" "); return `<svg viewBox="0 0 ${size} ${size}">${[.25,.5,.75,1].map(s=>`<polygon points="${labels.map((_,i)=>{ const a=-Math.PI/2+i*step, r=radius*s; return `${(center+Math.cos(a)*r).toFixed(1)},${(center+Math.sin(a)*r).toFixed(1)}`; }).join(" ")}" fill="none" stroke="rgba(63,214,255,.18)"></polygon>`).join("")}${labels.map((_,i)=>{ const a=-Math.PI/2+i*step; return `<line x1="${center}" y1="${center}" x2="${(center+Math.cos(a)*radius).toFixed(1)}" y2="${(center+Math.sin(a)*radius).toFixed(1)}" stroke="rgba(63,214,255,.14)"></line>`; }).join("")}<polygon points="${poly(values)}" fill="rgba(255,190,39,.16)" stroke="#ffbe27" stroke-width="3"></polygon>${labels.map((label,i)=>{ const a=-Math.PI/2+i*step; return `<text x="${(center+Math.cos(a)*(radius+18)).toFixed(1)}" y="${(center+Math.sin(a)*(radius+18)).toFixed(1)}" fill="#88a9bf" font-size="10" text-anchor="middle">${label.slice(0,6)}</text>`; }).join("")}</svg>`; }
+      function lanes(p){ const items=[["Stage",(Number(p.dalio_stage)/7)*100,"#3fd6ff"],["Shock",Number(p.shock_severity)*100,"#ff4d6d"],["Closure",Number(p.chokepoint_closure)*100,"#ffbe27"],["Solar",Number(p.solar_storm_severity)*100,"#29f0c0"]]; return `<svg viewBox="0 0 340 78" preserveAspectRatio="none">${items.map((item,i)=>{ const y=10+i*16, w=(item[1]/100)*250; return `<text x="0" y="${y+6}" fill="#88a9bf" font-size="10">${item[0]}</text><rect x="64" y="${y}" width="250" height="8" rx="4" fill="rgba(255,255,255,.08)"></rect><rect x="64" y="${y}" width="${w.toFixed(1)}" height="8" rx="4" fill="${item[2]}"></rect><circle cx="${(64+w).toFixed(1)}" cy="${(y+4).toFixed(1)}" r="4.5" fill="${item[2]}"></circle>`; }).join("")}</svg>`; }
+      function driverMeters(summary){ const idx=Object.fromEntries(summary.pillar_scores.map(p=>[p.pillar_id,p.score_0_100])); return ["water","food","finance","geography","physics"].map((key)=>{ const v=idx[key]||0, c=levelColor(v); return `<div class="meter"><div class="note">${key}</div><div class="meter-track"><div style="width:${v}%; height:100%; background:${c};"></div></div><div class="note" style="text-align:right;">${Math.round(v)}</div></div>`; }).join(""); }
+      function renderMap(){ if(!state.layerData) return; svg.innerHTML = '<rect x="0" y="0" width="1200" height="600" fill="#05111b" />'; state.layerData.feature_collection.features.forEach((feature)=>{ const coords=feature.geometry.coordinates[0].map(project), d=`M ${coords.map(([x,y])=>`${x.toFixed(1)} ${y.toFixed(1)}`).join(" L ")} Z`, value=state.layerData.mode==="scenario"?feature.properties.delta:feature.properties.value; const path=document.createElementNS("http://www.w3.org/2000/svg","path"); path.setAttribute("d",d); path.setAttribute("fill",mapColor(value||0, state.layerData.mode)); path.setAttribute("stroke",feature.properties.iso3===state.selectedIso3?"#dff8ff":"#16324c"); path.setAttribute("stroke-width",feature.properties.iso3===state.selectedIso3?"2.6":"1.4"); path.style.cursor="pointer"; path.addEventListener("mouseenter",()=>{ $("hoverMeta").textContent=`${feature.properties.name} | ${state.layerData.mode==="scenario"?"delta":"value"} ${Number(value).toFixed(1)} | conf ${feature.properties.confidence}`; $("selectedQuick").textContent=`${feature.properties.name} ${state.layerData.mode==="scenario"?fmt(value):Number(value).toFixed(1)}`; path.setAttribute("stroke-width","2.5"); path.style.opacity=".88"; }); path.addEventListener("mouseleave",()=>{ path.setAttribute("stroke-width",feature.properties.iso3===state.selectedIso3?"2.6":"1.4"); path.style.opacity="1"; }); path.addEventListener("click",async()=>{ state.selectedIso3=feature.properties.iso3; await loadCountry(state.selectedIso3); renderAll(); }); svg.appendChild(path); }); }
+      function renderKpis(){ const results=state.world?.results||[], scores=results.map(r=>r.rrfi_score), mean=scores.reduce((s,v)=>s+v,0)/Math.max(scores.length,1), fragile=results.filter(r=>r.rrfi_score<45).length, improving=(state.movers1d?.top_improvements||[]).filter(r=>r.delta>0).length; const rows=[["Countries tracked",results.length,"#3fd6ff"],["Mean RRFI",mean.toFixed(1),"#29f0c0"],["Fragile set",fragile,"#ff4d6d"],["1D improvers",improving,"#ffbe27"]]; $("kpis").innerHTML=rows.map(r=>`<section class="card"><div class="body"><div class="kpi-label">${r[0]}</div><div class="kpi-value" style="color:${r[2]};">${r[1]}</div></div></section>`).join(""); }
+      function renderCharts(){ $("worldTrend").innerHTML=lineChart((state.worldHistory?.points||[]).map(p=>({label:String(p.snapshot_date).slice(5), value:p.average_value}))); $("movers1d").innerHTML=barChart(state.movers1d?.top_deteriorations||[]); $("movers7d").innerHTML=barChart(state.movers7d?.top_deteriorations||[]); const pressure=(state.layerData?.feature_collection?.features||[]).filter(f=>f.properties.mode==="scenario").sort((a,b)=>a.properties.delta-b.properties.delta).slice(0,6).map(f=>({country:f.properties.name, delta:f.properties.delta})); $("scenarioPressure").innerHTML=barChart(pressure); $("scenarioLanes").innerHTML=lanes(params()); $("legendTitle").textContent=`${(state.layerData?.layer_id||"rrfi").toUpperCase()} ${state.layerData?.mode||"baseline"}`; $("legendScale").className=state.layerData?.mode==="scenario"?"scale delta":"scale"; $("legendRange").textContent=state.layerData?.mode==="scenario"?"-30 -> +30 delta":"0 -> 100 score"; }
+      function renderSelection(){ if(!state.selectedSummary||!state.selectedHistory) return; $("selectionName").textContent=state.selectedSummary.name; $("selectionMeta").textContent=`${state.selectedHistory.layer_id.toUpperCase()} | 1D ${state.selectedHistory.delta_1d == null ? "--" : fmt(state.selectedHistory.delta_1d)} | 7D ${state.selectedHistory.delta_7d == null ? "--" : fmt(state.selectedHistory.delta_7d)}`; $("countryTrend").innerHTML=lineChart(state.selectedHistory.points.map(p=>({label:String(p.snapshot_date).slice(5), value:p.value})), "#29f0c0"); $("rrfiGauge").innerHTML=gauge(state.selectedSummary.rrfi.final_score,"RRFI",levelColor(state.selectedSummary.rrfi.final_score)); $("confidenceGauge").innerHTML=gauge(state.selectedSummary.provenance.confidence*100,"Confidence","#3fd6ff","%"); $("selectionWarnings").textContent=state.selectedSummary.warnings.length?state.selectedSummary.warnings.join(" | "):"No active warnings for the selected country."; $("driverMeters").innerHTML=driverMeters(state.selectedSummary); $("pillarRadar").innerHTML=radar(state.selectedSummary.pillar_scores.map(p=>p.pillar_id), state.selectedSummary.pillar_scores.map(p=>p.score_0_100)); }
+      function renderLists(){ $("scenarioList").innerHTML=state.scenarios.map(s=>`<li><div style="display:flex;justify-content:space-between;gap:10px;"><strong>${s.name}</strong><span class="chip">${s.preset?"preset":"saved"}</span></div><div class="note">stage ${s.params.dalio_stage}, shock ${s.params.shock_severity}</div></li>`).join(""); $("alertList").innerHTML=state.alerts.length?state.alerts.map(a=>`<li><div style="display:flex;justify-content:space-between;gap:10px;"><strong>${a.target_value}</strong><span class="chip">${a.status}</span></div><div class="note">${a.target_type} threshold ${a.threshold ?? "n/a"}</div></li>`).join(""):'<li><div class="note">No alerts stored.</div></li>'; $("briefPanel").innerHTML=state.brief?`<div class="brief-item"><strong>${state.brief.headline}</strong><div class="note" style="margin-top:6px;">${state.brief.nowcast_summary}</div></div>${state.brief.top_deteriorations.map(item=>`<div class="brief-item"><div style="display:flex;justify-content:space-between;gap:10px;"><strong>${item.country}</strong><span class="chip delta-neg">${fmt(item.delta)}</span></div><div class="note">score ${item.score.toFixed(1)} | ${item.top_driver}</div></div>`).join("")}`:'<div class="note">Loading brief...</div>'; }
+      function renderWatchPulse(){ const current=Object.fromEntries((state.world?.results||[]).map(r=>[r.iso3,r])); const rows=[]; state.watchlists.forEach(w=>w.items.forEach(item=>{ if(item.kind!=="country") return; const history=(state.selectedIso3===item.value && state.selectedHistory)?state.selectedHistory.points:[]; const values=(history.length?history:Array.from({length:7},()=>({value:current[item.value]?.rrfi_score||0}))).slice(-7); rows.push(`<div class="watch-row"><div class="note">${item.label.slice(0,10)}</div><div class="watch-cells">${values.map(point=>{ const c=levelColor(point.value); return `<div class="watch-cell" style="background:${c}; opacity:${.45 + (point.value/100)*.55};"></div>`; }).join("")}</div><div class="note" style="text-align:right;">${current[item.value]?Math.round(current[item.value].rrfi_score):"--"}</div></div>`); })); $("watchPulse").innerHTML=rows.join("") || '<div class="note">No watchlist countries.</div>'; }
+      function renderNowcast(nowcast){ $("solarBadge").textContent=nowcast.state.solar_storm_watch.slice(0,3).toUpperCase(); $("chokeBadge").textContent=nowcast.state.chokepoint_tension.slice(0,4).toUpperCase(); $("nowcastSummary").textContent=nowcast.state.summary; }
+      function renderAll(){ renderKpis(); renderCharts(); renderSelection(); renderLists(); renderWatchPulse(); renderMap(); }
+      async function loadCountry(iso3){ const q=new URLSearchParams({ solar_storm_severity:$("solar").value, chokepoint_closure:$("choke").value }); const layer=$("layerSel").value; const [summary, history] = await Promise.all([ fetch(`/v1/country/${iso3}/summary?${q.toString()}`).then(r=>r.json()), fetch(`/v1/history/${iso3}?layer_id=${layer}&days=8`).then(r=>r.json()) ]); state.selectedSummary=summary; state.selectedHistory=history; }
+      async function refreshLayer(){ updateOutputs(); state.layerData = await fetch(`/v1/world/layer-view?${new URLSearchParams(params()).toString()}`).then(r=>r.json()); await loadCountry(state.selectedIso3); renderAll(); }
+      function applyPreset(p){ $("stage").value=p.dalio_stage; $("shock").value=p.shock_severity; $("choke").value=p.chokepoint_closure; $("solar").value=p.solar_storm_severity; updateOutputs(); }
+      async function loadStatic(){ const [world, history, movers1d, movers7d, nowcast, watchlists, scenarios, alerts, brief] = await Promise.all([ fetch("/v1/world/rrfi").then(r=>r.json()), fetch("/v1/world/history?layer_id=rrfi&days=8").then(r=>r.json()), fetch("/v1/world/movers?layer_id=rrfi&window_days=1&limit=6").then(r=>r.json()), fetch("/v1/world/movers?layer_id=rrfi&window_days=7&limit=6").then(r=>r.json()), fetch("/v1/nowcast").then(r=>r.json()), fetch("/v1/watchlists").then(r=>r.json()), fetch("/v1/scenarios").then(r=>r.json()), fetch("/v1/alerts").then(r=>r.json()), fetch("/v1/briefs/daily").then(r=>r.json()) ]); state.world=world; state.worldHistory=history; state.movers1d=movers1d; state.movers7d=movers7d; state.watchlists=watchlists.watchlists; state.scenarios=scenarios.scenarios; state.alerts=alerts.alerts; state.brief=brief; renderNowcast(nowcast); $("metaBadge").textContent=`${world.data_version} | as of ${world.as_of}`; $("presetSel").innerHTML=state.scenarios.map(s=>`<option value="${s.id}">${s.name}</option>`).join(""); if(state.scenarios.length) applyPreset(state.scenarios[0].params); }
+      async function saveScenario(){ await fetch("/v1/scenarios",{ method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ name:`Desk Scenario ${new Date().toISOString()}`, params:params() }) }); const scenarios=await fetch("/v1/scenarios").then(r=>r.json()); state.scenarios=scenarios.scenarios; $("presetSel").innerHTML=state.scenarios.map(s=>`<option value="${s.id}">${s.name}</option>`).join(""); renderLists(); }
+      async function runSnapshot(){ const q=new URLSearchParams(params()); q.set("snapshot_date", new Date().toISOString().slice(0,10)); await fetch(`/v1/snapshots/run?${q.toString()}`, { method:"POST" }); state.worldHistory=await fetch("/v1/world/history?layer_id=rrfi&days=8").then(r=>r.json()); state.movers1d=await fetch("/v1/world/movers?layer_id=rrfi&window_days=1&limit=6").then(r=>r.json()); state.movers7d=await fetch("/v1/world/movers?layer_id=rrfi&window_days=7&limit=6").then(r=>r.json()); state.brief=await fetch("/v1/briefs/daily").then(r=>r.json()); renderAll(); }
+      $("refresh").addEventListener("click", refreshLayer); $("saveScenario").addEventListener("click", saveScenario); $("runSnapshot").addEventListener("click", runSnapshot); $("modeSel").addEventListener("change", refreshLayer); $("layerSel").addEventListener("change", refreshLayer); $("presetSel").addEventListener("change", ()=>{ const selected=state.scenarios.find(s=>s.id===$("presetSel").value); if(!selected) return; applyPreset(selected.params); $("modeSel").value="scenario"; refreshLayer(); });
+      loadStatic().then(()=>loadCountry(state.selectedIso3)).then(refreshLayer); setInterval(async()=>{ const nowcast=await fetch("/v1/nowcast").then(r=>r.json()); renderNowcast(nowcast); }, 30000);
     </script>
   </body>
 </html>

@@ -4,13 +4,13 @@ import json
 import os
 import sqlite3
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from app.data import DEFAULT_SCENARIO_PRESETS
-from app.models import AlertRule, ScenarioDefinition, Watchlist, WatchlistItem
+from app.models import AlertRule, ScenarioDefinition, ScoreSnapshot, Watchlist
 
 
 def utc_now() -> datetime:
@@ -61,6 +61,25 @@ class Storage:
                 CREATE TABLE IF NOT EXISTS scenario_runs (
                     id TEXT PRIMARY KEY,
                     payload TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS snapshots (
+                    id TEXT PRIMARY KEY,
+                    snapshot_date TEXT NOT NULL,
+                    iso3 TEXT NOT NULL,
+                    layer_id TEXT NOT NULL,
+                    value REAL NOT NULL,
+                    confidence REAL NOT NULL,
+                    source_count INTEGER NOT NULL,
+                    staleness_days INTEGER NOT NULL,
+                    top_driver TEXT NOT NULL,
+                    data_version TEXT NOT NULL,
+                    params_json TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    UNIQUE(snapshot_date, iso3, layer_id)
                 )
                 """
             )
@@ -176,6 +195,105 @@ class Storage:
 
     def get_scenario_run(self, scenario_id: str) -> dict[str, Any] | None:
         return self._get("scenario_runs", scenario_id)
+
+    def snapshot_count(self) -> int:
+        with self.connect() as conn:
+            row = conn.execute("SELECT COUNT(*) AS count FROM snapshots").fetchone()
+        return int(row["count"])
+
+    def save_snapshot(self, snapshot: ScoreSnapshot) -> ScoreSnapshot:
+        payload = snapshot.model_dump(mode="json")
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO snapshots (
+                    id, snapshot_date, iso3, layer_id, value, confidence,
+                    source_count, staleness_days, top_driver, data_version,
+                    params_json, payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    snapshot.id,
+                    snapshot.snapshot_date.isoformat(),
+                    snapshot.iso3,
+                    snapshot.layer_id,
+                    snapshot.value,
+                    snapshot.confidence,
+                    snapshot.source_count,
+                    snapshot.staleness_days,
+                    snapshot.top_driver,
+                    snapshot.data_version,
+                    json.dumps(snapshot.params),
+                    json.dumps(payload),
+                ),
+            )
+            conn.commit()
+        return snapshot
+
+    def latest_snapshot_date(self, layer_id: str = "rrfi") -> date | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT snapshot_date FROM snapshots WHERE layer_id = ? ORDER BY snapshot_date DESC LIMIT 1",
+                (layer_id,),
+            ).fetchone()
+        return date.fromisoformat(row["snapshot_date"]) if row else None
+
+    def previous_snapshot_date(self, layer_id: str, latest_date: date, window_days: int) -> date | None:
+        target_date = latest_date - timedelta(days=window_days)
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT snapshot_date
+                FROM snapshots
+                WHERE layer_id = ? AND snapshot_date <= ? AND snapshot_date < ?
+                ORDER BY snapshot_date DESC
+                LIMIT 1
+                """,
+                (layer_id, target_date.isoformat(), latest_date.isoformat()),
+            ).fetchone()
+        return date.fromisoformat(row["snapshot_date"]) if row else None
+
+    def list_snapshot_dates(self, layer_id: str = "rrfi", limit: int = 30) -> list[date]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT snapshot_date
+                FROM snapshots
+                WHERE layer_id = ?
+                ORDER BY snapshot_date DESC
+                LIMIT ?
+                """,
+                (layer_id, limit),
+            ).fetchall()
+        return [date.fromisoformat(row["snapshot_date"]) for row in rows]
+
+    def list_world_snapshots(self, layer_id: str, snapshot_date: date) -> list[ScoreSnapshot]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload
+                FROM snapshots
+                WHERE layer_id = ? AND snapshot_date = ?
+                ORDER BY iso3
+                """,
+                (layer_id, snapshot_date.isoformat()),
+            ).fetchall()
+        return [ScoreSnapshot(**json.loads(row["payload"])) for row in rows]
+
+    def list_country_history(self, iso3: str, layer_id: str = "rrfi", days: int = 14) -> list[ScoreSnapshot]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload
+                FROM snapshots
+                WHERE iso3 = ? AND layer_id = ?
+                ORDER BY snapshot_date DESC
+                LIMIT ?
+                """,
+                (iso3, layer_id, days),
+            ).fetchall()
+        history = [ScoreSnapshot(**json.loads(row["payload"])) for row in rows]
+        return list(reversed(history))
 
 
 storage = Storage()

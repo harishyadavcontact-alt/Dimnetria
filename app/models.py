@@ -247,3 +247,72 @@ class DailyBrief(BaseModel):
     watchlist_focus: list[str]
     top_deteriorations: list[DailyBriefEntry]
     analyst_notes: list[str]
+
+
+class ScoreSnapshot(BaseModel):
+    id: str
+    snapshot_date: date
+    iso3: str
+    layer_id: str
+    value: float
+    top_driver: str
+    confidence: float = Field(ge=0, le=1)
+    source_count: int = Field(ge=0)
+    staleness_days: int = Field(ge=0)
+    data_version: str
+    params: dict[str, float | int]
+
+
+class CountryHistoryPoint(BaseModel):
+    snapshot_date: date
+    value: float
+    delta_from_previous: float | None = None
+    confidence: float = Field(ge=0, le=1)
+    top_driver: str
+
+
+class CountryHistoryResponse(BaseModel):
+    iso3: str
+    name: str
+    layer_id: str
+    current_value: float
+    delta_1d: float | None = None
+    delta_7d: float | None = None
+    points: list[CountryHistoryPoint]
+
+
+class WorldMover(BaseModel):
+    iso3: str
+    country: str
+    layer_id: str
+    current_value: float
+    previous_value: float
+    delta: float
+    top_driver: str
+
+
+class WorldMoversResponse(BaseModel):
+    layer_id: str
+    latest_date: date
+    previous_date: date
+    window_days: int
+    top_deteriorations: list[WorldMover]
+    top_improvements: list[WorldMover]
+
+
+class WorldHistoryPoint(BaseModel):
+    snapshot_date: date
+    average_value: float
+    min_value: float
+    max_value: float
+
+
+class WorldHistoryResponse(BaseModel):
+    layer_id: str
+    points: list[WorldHistoryPoint]
+
+
+class SnapshotRunSummary(BaseModel):
+    snapshot_date: date
+    layers_written: int
+    records_written: int

@@ -10,6 +10,7 @@ from app.data import CHOKEPOINTS, COUNTRIES, DATA_VERSION, ECC_TOPIC_DATA, NOWCA
 from app.models import (
     AlertRule,
     BaselineLayerProperties,
+    CountryHistoryResponse,
     ECCCountrySignal,
     LayerFeature,
     LayerMetadata,
@@ -18,11 +19,19 @@ from app.models import (
     ScenarioDefinition,
     ScenarioLayerProperties,
     ScenarioRunRequest,
+    SnapshotRunSummary,
     Watchlist,
+    WorldHistoryResponse,
+    WorldMoversResponse,
 )
 from app.scoring import (
+    build_country_history_response,
     build_beauty_spotlight,
     build_daily_brief,
+    build_seed_snapshot_series,
+    build_world_history_response,
+    build_world_movers_response,
+    build_world_snapshots,
     rrfi_for_country,
     rrfi_world,
     run_dalio_scenario,
@@ -31,7 +40,7 @@ from app.scoring import (
 )
 from app.storage import storage
 
-app = FastAPI(title="Dimentria RRFI API", version="0.3.0")
+app = FastAPI(title="Dimentria RRFI API", version="0.4.0")
 app.mount("/hud", StaticFiles(directory="app/static", html=True), name="static")
 
 LAYERS = [
@@ -48,6 +57,16 @@ LAYERS = [
 
 def api_meta() -> dict[str, object]:
     return {"as_of": NOWCAST_STATE.get("as_of", None) or str(datetime(2026, 3, 5).date()), "data_version": DATA_VERSION}
+
+
+def bootstrap_snapshots() -> None:
+    if storage.snapshot_count() > 0:
+        return
+    for snapshot in build_seed_snapshot_series(days=8):
+        storage.save_snapshot(snapshot)
+
+
+bootstrap_snapshots()
 
 
 @app.get("/")
@@ -256,6 +275,34 @@ def get_world_beauty_spotlight(limit: int = 4) -> dict:
     return build_beauty_spotlight(limit=limit).model_dump(mode="json")
 
 
+@app.get("/v1/world/history")
+def get_world_history(layer_id: str = "rrfi", days: int = 14) -> dict:
+    dates = list(reversed(storage.list_snapshot_dates(layer_id=layer_id, limit=days)))
+    snapshots_by_date = {snapshot_date: storage.list_world_snapshots(layer_id, snapshot_date) for snapshot_date in dates}
+    response = build_world_history_response(layer_id, snapshots_by_date)
+    return response.model_dump(mode="json")
+
+
+@app.get("/v1/world/movers")
+def get_world_movers(layer_id: str = "rrfi", window_days: int = 1, limit: int = 6) -> dict:
+    latest_date = storage.latest_snapshot_date(layer_id=layer_id)
+    if not latest_date:
+        raise HTTPException(status_code=404, detail="No snapshots available")
+    previous_date = storage.previous_snapshot_date(layer_id=layer_id, latest_date=latest_date, window_days=window_days)
+    if not previous_date:
+        raise HTTPException(status_code=404, detail="Not enough snapshot history for requested window")
+    response = build_world_movers_response(
+        layer_id=layer_id,
+        latest_date=latest_date,
+        previous_date=previous_date,
+        latest_rows=storage.list_world_snapshots(layer_id, latest_date),
+        previous_rows=storage.list_world_snapshots(layer_id, previous_date),
+        window_days=window_days,
+        limit=limit,
+    )
+    return response.model_dump(mode="json")
+
+
 @app.get("/v1/layer/{layer_id}/tiles/{z}/{x}/{y}")
 def get_layer_tiles(layer_id: str, z: int, x: int, y: int) -> dict:
     return {
@@ -281,6 +328,18 @@ def get_nowcast() -> dict:
 def get_ecc() -> dict:
     results = [ECCCountrySignal(geo_id=geo_id, **signals).model_dump() for geo_id, signals in ECC_TOPIC_DATA.items()]
     return {"results": results, **api_meta()}
+
+
+@app.get("/v1/history/{iso3}")
+def get_country_history(iso3: str, layer_id: str = "rrfi", days: int = 14) -> dict:
+    iso3 = iso3.upper()
+    if iso3 not in COUNTRIES:
+        raise HTTPException(status_code=404, detail=f"Unknown country ISO3: {iso3}")
+    snapshots = storage.list_country_history(iso3=iso3, layer_id=layer_id, days=days)
+    if not snapshots:
+        raise HTTPException(status_code=404, detail="No snapshot history available")
+    response = build_country_history_response(iso3, layer_id, snapshots)
+    return response.model_dump(mode="json")
 
 
 @app.post("/v1/alerts")
@@ -328,8 +387,54 @@ def post_scenario_definition(payload: dict) -> dict:
 @app.get("/v1/briefs/daily")
 def get_daily_brief(scenario_id: str | None = None) -> dict:
     scenario = storage.get_scenario(scenario_id) if scenario_id else None
-    brief = build_daily_brief(watchlists=storage.list_watchlists(), scenario=scenario)
+    latest_date = storage.latest_snapshot_date(layer_id="rrfi")
+    movers = None
+    if latest_date:
+        previous_date = storage.previous_snapshot_date(layer_id="rrfi", latest_date=latest_date, window_days=1)
+        if previous_date:
+            movers = build_world_movers_response(
+                layer_id="rrfi",
+                latest_date=latest_date,
+                previous_date=previous_date,
+                latest_rows=storage.list_world_snapshots("rrfi", latest_date),
+                previous_rows=storage.list_world_snapshots("rrfi", previous_date),
+                window_days=1,
+                limit=5,
+            )
+    brief = build_daily_brief(watchlists=storage.list_watchlists(), scenario=scenario, movers=movers)
     return brief.model_dump(mode="json")
+
+
+@app.post("/v1/snapshots/run")
+def post_snapshot_run(
+    snapshot_date: str | None = None,
+    dalio_stage: int = 1,
+    shock_severity: float = 0.0,
+    chokepoint_closure: float = 0.0,
+    solar_storm_severity: float = 0.0,
+) -> dict:
+    try:
+        parsed_date = datetime.fromisoformat(snapshot_date).date() if snapshot_date else datetime.now(timezone.utc).date()
+        layers = ["rrfi", "water", "food", "debt", "military", "geography"]
+        written = 0
+        for layer_id in layers:
+            for snapshot in build_world_snapshots(
+                layer_id=layer_id,
+                snapshot_date=parsed_date,
+                dalio_stage=dalio_stage,
+                shock_severity=shock_severity,
+                chokepoint_closure=chokepoint_closure,
+                solar_storm_severity=solar_storm_severity,
+            ):
+                storage.save_snapshot(snapshot)
+                written += 1
+        return SnapshotRunSummary(
+            snapshot_date=parsed_date,
+            layers_written=len(layers),
+            records_written=written,
+        ).model_dump(mode="json")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/v1/scenario/run")

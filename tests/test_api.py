@@ -26,6 +26,7 @@ def test_hud_serves_html():
     assert "text/html" in response.headers["content-type"]
     assert "Dimentria" in response.text
     assert "Fragility workstation" in response.text
+    assert "World Pulse" in response.text
 
 
 def test_world_rrfi_endpoint_returns_countries_and_metadata():
@@ -58,6 +59,29 @@ def test_world_geojson_and_chokepoints():
     chokepoints = client.get("/v1/chokepoints")
     assert chokepoints.status_code == 200
     assert len(chokepoints.json()["features"]) >= 3
+
+
+def test_world_history_and_movers_endpoints():
+    history = client.get("/v1/world/history?layer_id=rrfi&days=8")
+    assert history.status_code == 200
+    payload = history.json()
+    assert payload["layer_id"] == "rrfi"
+    assert len(payload["points"]) >= 7
+
+    movers = client.get("/v1/world/movers?layer_id=rrfi&window_days=1&limit=4")
+    assert movers.status_code == 200
+    movers_payload = movers.json()
+    assert len(movers_payload["top_deteriorations"]) == 4
+    assert "delta" in movers_payload["top_deteriorations"][0]
+
+
+def test_country_history_endpoint():
+    response = client.get("/v1/history/IND?layer_id=rrfi&days=8")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["iso3"] == "IND"
+    assert len(payload["points"]) >= 7
+    assert "delta_1d" in payload
 
 
 def test_watchlists_and_scenarios_are_persistent_resources():
@@ -148,6 +172,16 @@ def test_nowcast_ecc_alerts_and_daily_brief():
     payload = brief.json()
     assert len(payload["top_deteriorations"]) >= 1
     assert "watchlist_focus" in payload
+
+
+def test_snapshot_run_endpoint_writes_records():
+    response = client.post(
+        "/v1/snapshots/run?snapshot_date=2026-03-09&dalio_stage=6&shock_severity=0.4&chokepoint_closure=0.2&solar_storm_severity=0.1"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["layers_written"] >= 6
+    assert payload["records_written"] >= 20
 
 
 def test_world_layer_view_baseline_and_scenario():

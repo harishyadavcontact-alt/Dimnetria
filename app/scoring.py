@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.data import (
@@ -17,6 +17,8 @@ from app.ingestion import repository
 from app.models import (
     BeautySpotlightCard,
     BeautySpotlightResponse,
+    CountryHistoryPoint,
+    CountryHistoryResponse,
     CountryLayerSnapshot,
     CountrySummary,
     DailyBrief,
@@ -25,10 +27,15 @@ from app.models import (
     MetricSnapshot,
     PillarScore,
     RRFIResult,
+    ScoreSnapshot,
     ScenarioDefinition,
     ScenarioRunResult,
     ScoreProvenance,
     Watchlist,
+    WorldHistoryPoint,
+    WorldHistoryResponse,
+    WorldMover,
+    WorldMoversResponse,
 )
 
 REQUIRED_METRICS = {
@@ -473,6 +480,196 @@ def run_dalio_scenario(
     )
 
 
+def historical_scenario_inputs(days_ago: int) -> dict[str, float | int]:
+    # Use a fixed stress tape so seeded history is deterministic and repeatable.
+    presets = [
+        {"dalio_stage": 1, "shock_severity": 0.0, "chokepoint_closure": 0.0, "solar_storm_severity": 0.0},
+        {"dalio_stage": 5, "shock_severity": 0.25, "chokepoint_closure": 0.10, "solar_storm_severity": 0.00},
+        {"dalio_stage": 6, "shock_severity": 0.55, "chokepoint_closure": 0.35, "solar_storm_severity": 0.10},
+        {"dalio_stage": 4, "shock_severity": 0.20, "chokepoint_closure": 0.05, "solar_storm_severity": 0.30},
+        {"dalio_stage": 5, "shock_severity": 0.30, "chokepoint_closure": 0.20, "solar_storm_severity": 0.15},
+        {"dalio_stage": 6, "shock_severity": 0.45, "chokepoint_closure": 0.25, "solar_storm_severity": 0.05},
+        {"dalio_stage": 5, "shock_severity": 0.20, "chokepoint_closure": 0.08, "solar_storm_severity": 0.00},
+        {"dalio_stage": 4, "shock_severity": 0.12, "chokepoint_closure": 0.02, "solar_storm_severity": 0.10},
+    ]
+    if days_ago <= 0:
+        return presets[0]
+    return presets[((days_ago - 1) % (len(presets) - 1)) + 1]
+
+
+def build_world_snapshots(
+    *,
+    layer_id: str,
+    snapshot_date: date,
+    dalio_stage: int = 1,
+    shock_severity: float = 0.0,
+    chokepoint_closure: float = 0.0,
+    solar_storm_severity: float = 0.0,
+) -> list[ScoreSnapshot]:
+    if dalio_stage == 1 and shock_severity == 0.0 and chokepoint_closure == 0.0 and solar_storm_severity == 0.0:
+        rows = world_layer_snapshot(layer_id=layer_id)
+        return [
+            ScoreSnapshot(
+                id=f"{snapshot_date.isoformat()}:{layer_id}:{row.iso3}",
+                snapshot_date=snapshot_date,
+                iso3=row.iso3,
+                layer_id=layer_id,
+                value=row.value,
+                top_driver=row.top_driver,
+                confidence=row.confidence,
+                source_count=row.source_count,
+                staleness_days=row.staleness_days,
+                data_version=DATA_VERSION,
+                params={
+                    "dalio_stage": dalio_stage,
+                    "shock_severity": shock_severity,
+                    "chokepoint_closure": chokepoint_closure,
+                    "solar_storm_severity": solar_storm_severity,
+                },
+            )
+            for row in rows
+        ]
+
+    rows = scenario_layer_delta(
+        layer_id=layer_id,
+        dalio_stage=dalio_stage,
+        shock_severity=shock_severity,
+        chokepoint_closure=chokepoint_closure,
+        solar_storm_severity=solar_storm_severity,
+    )
+    return [
+        ScoreSnapshot(
+            id=f"{snapshot_date.isoformat()}:{layer_id}:{row['iso3']}",
+            snapshot_date=snapshot_date,
+            iso3=str(row["iso3"]),
+            layer_id=layer_id,
+            value=float(row["scenario"]),
+            top_driver=str(row["top_driver"]),
+            confidence=float(row["confidence"]),
+            source_count=int(row["source_count"]),
+            staleness_days=int(row["staleness_days"]),
+            data_version=DATA_VERSION,
+            params={
+                "dalio_stage": dalio_stage,
+                "shock_severity": shock_severity,
+                "chokepoint_closure": chokepoint_closure,
+                "solar_storm_severity": solar_storm_severity,
+            },
+        )
+        for row in rows
+    ]
+
+
+def build_seed_snapshot_series(days: int = 8, layer_ids: list[str] | None = None) -> list[ScoreSnapshot]:
+    layers = layer_ids or ["rrfi", "water", "food", "debt", "military", "geography"]
+    all_rows: list[ScoreSnapshot] = []
+    for days_ago in range(days - 1, -1, -1):
+        snapshot_date = BASE_DATE - timedelta(days=days_ago)
+        params = historical_scenario_inputs(days_ago)
+        for layer_id in layers:
+            all_rows.extend(
+                build_world_snapshots(
+                    layer_id=layer_id,
+                    snapshot_date=snapshot_date,
+                    dalio_stage=int(params["dalio_stage"]),
+                    shock_severity=float(params["shock_severity"]),
+                    chokepoint_closure=float(params["chokepoint_closure"]),
+                    solar_storm_severity=float(params["solar_storm_severity"]),
+                )
+            )
+    return all_rows
+
+
+def build_country_history_response(
+    iso3: str,
+    layer_id: str,
+    snapshots: list[ScoreSnapshot],
+) -> CountryHistoryResponse:
+    if not snapshots:
+        raise ValueError(f"No snapshot history available for {iso3}/{layer_id}")
+    deltas: list[CountryHistoryPoint] = []
+    previous_value: float | None = None
+    for snapshot in snapshots:
+        delta_from_previous = None if previous_value is None else round(snapshot.value - previous_value, 2)
+        deltas.append(
+            CountryHistoryPoint(
+                snapshot_date=snapshot.snapshot_date,
+                value=round(snapshot.value, 2),
+                delta_from_previous=delta_from_previous,
+                confidence=snapshot.confidence,
+                top_driver=snapshot.top_driver,
+            )
+        )
+        previous_value = snapshot.value
+
+    current_value = deltas[-1].value
+    delta_1d = deltas[-1].delta_from_previous
+    delta_7d = round(deltas[-1].value - deltas[0].value, 2) if len(deltas) > 1 else None
+    return CountryHistoryResponse(
+        iso3=iso3,
+        name=COUNTRIES[iso3]["name"],
+        layer_id=layer_id,
+        current_value=current_value,
+        delta_1d=delta_1d,
+        delta_7d=delta_7d,
+        points=deltas,
+    )
+
+
+def build_world_movers_response(
+    *,
+    layer_id: str,
+    latest_date: date,
+    previous_date: date,
+    latest_rows: list[ScoreSnapshot],
+    previous_rows: list[ScoreSnapshot],
+    window_days: int,
+    limit: int = 6,
+) -> WorldMoversResponse:
+    previous_index = {row.iso3: row for row in previous_rows}
+    deltas: list[WorldMover] = []
+    for row in latest_rows:
+        previous = previous_index.get(row.iso3)
+        if previous is None:
+            continue
+        deltas.append(
+            WorldMover(
+                iso3=row.iso3,
+                country=COUNTRIES[row.iso3]["name"],
+                layer_id=layer_id,
+                current_value=round(row.value, 2),
+                previous_value=round(previous.value, 2),
+                delta=round(row.value - previous.value, 2),
+                top_driver=row.top_driver,
+            )
+        )
+    sorted_rows = sorted(deltas, key=lambda mover: mover.delta)
+    return WorldMoversResponse(
+        layer_id=layer_id,
+        latest_date=latest_date,
+        previous_date=previous_date,
+        window_days=window_days,
+        top_deteriorations=sorted_rows[:limit],
+        top_improvements=list(reversed(sorted_rows[-limit:])),
+    )
+
+
+def build_world_history_response(layer_id: str, snapshots_by_date: dict[date, list[ScoreSnapshot]]) -> WorldHistoryResponse:
+    points = []
+    for snapshot_date in sorted(snapshots_by_date):
+        rows = snapshots_by_date[snapshot_date]
+        values = [row.value for row in rows]
+        points.append(
+            WorldHistoryPoint(
+                snapshot_date=snapshot_date,
+                average_value=round(sum(values) / max(len(values), 1), 2),
+                min_value=round(min(values), 2),
+                max_value=round(max(values), 2),
+            )
+        )
+    return WorldHistoryResponse(layer_id=layer_id, points=points)
+
+
 def _resilience_tier(score: float) -> str:
     if score >= 75:
         return "fortress"
@@ -515,36 +712,51 @@ def build_daily_brief(
     *,
     watchlists: list[Watchlist],
     scenario: ScenarioDefinition | None = None,
+    movers: WorldMoversResponse | None = None,
 ) -> DailyBrief:
-    params = scenario.params if scenario else {
-        "dalio_stage": 5,
-        "shock_severity": 0.35,
-        "chokepoint_closure": 0.15,
-        "solar_storm_severity": 0.1,
-    }
-    rows = sorted(
-        scenario_layer_delta(
-            layer_id="rrfi",
-            dalio_stage=int(params["dalio_stage"]),
-            shock_severity=float(params["shock_severity"]),
-            chokepoint_closure=float(params["chokepoint_closure"]),
-            solar_storm_severity=float(params["solar_storm_severity"]),
-        ),
-        key=lambda row: float(row["delta"]),
-    )
     top = []
-    for row in rows[:5]:
-        summary = rrfi_for_country(str(row["iso3"]))
-        top.append(
-            DailyBriefEntry(
-                iso3=str(row["iso3"]),
-                country=str(row["name"]),
-                score=float(row["scenario"]),
-                delta=float(row["delta"]),
-                top_driver=str(row["top_driver"]),
-                warning_count=len(summary.warnings),
+    if movers:
+        for row in movers.top_deteriorations[:5]:
+            summary = rrfi_for_country(row.iso3)
+            top.append(
+                DailyBriefEntry(
+                    iso3=row.iso3,
+                    country=row.country,
+                    score=row.current_value,
+                    delta=row.delta,
+                    top_driver=row.top_driver,
+                    warning_count=len(summary.warnings),
+                )
             )
+    else:
+        params = scenario.params if scenario else {
+            "dalio_stage": 5,
+            "shock_severity": 0.35,
+            "chokepoint_closure": 0.15,
+            "solar_storm_severity": 0.1,
+        }
+        rows = sorted(
+            scenario_layer_delta(
+                layer_id="rrfi",
+                dalio_stage=int(params["dalio_stage"]),
+                shock_severity=float(params["shock_severity"]),
+                chokepoint_closure=float(params["chokepoint_closure"]),
+                solar_storm_severity=float(params["solar_storm_severity"]),
+            ),
+            key=lambda row: float(row["delta"]),
         )
+        for row in rows[:5]:
+            summary = rrfi_for_country(str(row["iso3"]))
+            top.append(
+                DailyBriefEntry(
+                    iso3=str(row["iso3"]),
+                    country=str(row["name"]),
+                    score=float(row["scenario"]),
+                    delta=float(row["delta"]),
+                    top_driver=str(row["top_driver"]),
+                    warning_count=len(summary.warnings),
+                )
+            )
 
     focus = []
     for watchlist in watchlists:
@@ -556,13 +768,13 @@ def build_daily_brief(
         generated_at=datetime.now(timezone.utc),
         as_of=BASE_DATE,
         data_version=DATA_VERSION,
-        headline="Fragility pressure remains concentrated around supply chains, debt stress, and water insecurity.",
-        nowcast_summary="Elevated chokepoint tension and moderate solar-watch risk skew downside scenarios toward import-dependent states.",
+        headline="Fragility pressure is clearest where import dependence, debt drag, and system stress stack together.",
+        nowcast_summary="Map and movers should be read together: the current state shows baseline structure, while recent movement shows where pressure is accelerating.",
         watchlist_focus=focus,
         top_deteriorations=top,
         analyst_notes=[
             "Monitor countries with low food self-reliance and high chokepoint dependence for nonlinear downside moves.",
-            "Use scenario compare mode to distinguish structural weakness from transient nowcast-driven deterioration.",
+            "Use recent movers to separate slow structural weakness from fresh deterioration.",
             "Confidence degrades as source freshness ages; treat stale movers as review candidates, not final truth.",
         ],
     )

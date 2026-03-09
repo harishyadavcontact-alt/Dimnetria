@@ -1,7 +1,13 @@
 from app.scoring import (
+    build_country_history_response,
     build_daily_brief,
+    build_seed_snapshot_series,
+    build_world_history_response,
+    build_world_movers_response,
+    build_world_snapshots,
     compute_law_multipliers,
     compute_pillars,
+    historical_scenario_inputs,
     normalize_metric,
     rrfi_for_country,
     rrfi_world,
@@ -75,3 +81,46 @@ def test_daily_brief_uses_watchlists():
     brief = build_daily_brief(watchlists=watchlists)
     assert len(brief.top_deteriorations) >= 1
     assert len(brief.watchlist_focus) >= 1
+
+
+def test_historical_inputs_baseline_today():
+    params = historical_scenario_inputs(0)
+    assert params["dalio_stage"] == 1
+    assert params["shock_severity"] == 0.0
+
+
+def test_build_world_snapshots_and_seed_series():
+    rows = build_world_snapshots(layer_id="rrfi", snapshot_date=rrfi_for_country("IND").date)
+    assert len(rows) >= 20
+    seeded = build_seed_snapshot_series(days=8)
+    assert len(seeded) >= 20 * 6 * 8
+
+
+def test_build_country_and_world_history_responses():
+    latest_date = storage.latest_snapshot_date("rrfi")
+    assert latest_date is not None
+    previous_date = storage.previous_snapshot_date("rrfi", latest_date, 1)
+    assert previous_date is not None
+
+    latest_rows = storage.list_world_snapshots("rrfi", latest_date)
+    previous_rows = storage.list_world_snapshots("rrfi", previous_date)
+    movers = build_world_movers_response(
+        layer_id="rrfi",
+        latest_date=latest_date,
+        previous_date=previous_date,
+        latest_rows=latest_rows,
+        previous_rows=previous_rows,
+        window_days=1,
+        limit=5,
+    )
+    assert len(movers.top_deteriorations) == 5
+
+    history = build_country_history_response("IND", "rrfi", storage.list_country_history("IND", "rrfi", 8))
+    assert history.iso3 == "IND"
+    assert len(history.points) >= 7
+
+    world_history = build_world_history_response(
+        "rrfi",
+        {latest_date: latest_rows, previous_date: previous_rows},
+    )
+    assert len(world_history.points) == 2
