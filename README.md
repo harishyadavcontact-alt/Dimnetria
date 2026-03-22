@@ -2,6 +2,23 @@
 
 This repository contains a Codex-ready MVP for the Dimentria Analyst Desk: a map-first fragility system with RRFI scoring, scenario comparison, persisted analyst objects, and a lightweight operator HUD.
 
+## Reading Order
+
+1. `Dimnetria_genesis.md`
+2. `README.md`
+3. `docs/root-docs/`
+
+`Dimnetria_genesis.md` is the local source of truth for repo doctrine and agent starting context.
+Use this `README.md` as the implementation and navigation map.
+
+## Development Model
+
+This repo follows a genesis-first, bottom-up development model:
+
+- global doctrine lives above the repo
+- `Dimnetria_genesis.md` governs the repo locally
+- feature work should be clarified as close to execution as possible
+
 ## Implemented in this scaffold
 
 - Canonical RRFI-oriented data contracts (metrics, pillars, law multipliers, scenario outputs).
@@ -65,7 +82,7 @@ pytest
 
 ## Product docs
 
-- `PRODUCT_DOC.md`
-- `TECH_SPEC.md`
-- `CHANGELOG.md`
-- `ANALYST_DESK_SPEC.md`
+- `docs/root-docs/PRODUCT_DOC.md`
+- `docs/root-docs/TECH_SPEC.md`
+- `docs/root-docs/CHANGELOG.md`
+- `docs/root-docs/ANALYST_DESK_SPEC.md`
