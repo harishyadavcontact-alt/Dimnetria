@@ -28,6 +28,8 @@ def test_rrfi_country_summary_shape():
     assert 0 <= summary.rrfi.final_score <= 100
     assert len(summary.top_drivers) == 3
     assert summary.provenance.source_count >= 1
+    assert 0 <= summary.fragility_profile.ruin_exposure <= 100
+    assert 0 <= summary.fragility_profile.optionality_score <= 100
 
 
 def test_compute_pillars_returns_provenance_and_warnings():
@@ -59,6 +61,14 @@ def test_world_layer_snapshot_rrfi():
     rows = world_layer_snapshot(layer_id="rrfi")
     assert len(rows) >= 20
     assert all(hasattr(row, "value") for row in rows)
+
+
+def test_world_layer_snapshot_supports_new_lenses():
+    ruin = world_layer_snapshot(layer_id="ruin")
+    optionality = world_layer_snapshot(layer_id="optionality")
+    confidence = world_layer_snapshot(layer_id="confidence")
+    assert len(ruin) >= 20
+    assert len(optionality) == len(ruin) == len(confidence)
 
 
 def test_scenario_layer_delta_rrfi_has_delta_fields():
@@ -93,7 +103,7 @@ def test_build_world_snapshots_and_seed_series():
     rows = build_world_snapshots(layer_id="rrfi", snapshot_date=rrfi_for_country("IND").date)
     assert len(rows) >= 20
     seeded = build_seed_snapshot_series(days=8)
-    assert len(seeded) >= 20 * 6 * 8
+    assert len(seeded) >= 20 * 9 * 8
 
 
 def test_build_country_and_world_history_responses():

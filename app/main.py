@@ -50,6 +50,9 @@ LAYERS = [
     LayerMetadata(layer_id="debt", name="Debt Discipline", unit="score", legend="Inverted debt burden"),
     LayerMetadata(layer_id="military", name="Military Autonomy", unit="score", legend="0-100"),
     LayerMetadata(layer_id="geography", name="Chokepoint/Geography", unit="score", legend="Composite exposure"),
+    LayerMetadata(layer_id="ruin", name="Ruin Exposure", unit="risk", legend="0-100 ruin exposure"),
+    LayerMetadata(layer_id="optionality", name="Optionality", unit="score", legend="0-100 escape capacity"),
+    LayerMetadata(layer_id="confidence", name="Confidence", unit="score", legend="0-100 confidence"),
     LayerMetadata(layer_id="ecc_bull", name="ECC Bull Intensity", unit="0-100", legend="Narrative optimism"),
     LayerMetadata(layer_id="ecc_bear", name="ECC Bear Intensity", unit="0-100", legend="Narrative concern"),
 ]
@@ -60,9 +63,10 @@ def api_meta() -> dict[str, object]:
 
 
 def bootstrap_snapshots() -> None:
-    if storage.snapshot_count() > 0:
+    required_layers = ["rrfi", "water", "food", "debt", "military", "geography", "ruin", "optionality", "confidence"]
+    if storage.snapshot_count() > 0 and all(storage.latest_snapshot_date(layer_id=layer_id) is not None for layer_id in required_layers):
         return
-    for snapshot in build_seed_snapshot_series(days=8):
+    for snapshot in build_seed_snapshot_series(days=8, layer_ids=required_layers):
         storage.save_snapshot(snapshot)
 
 
@@ -415,7 +419,7 @@ def post_snapshot_run(
 ) -> dict:
     try:
         parsed_date = datetime.fromisoformat(snapshot_date).date() if snapshot_date else datetime.now(timezone.utc).date()
-        layers = ["rrfi", "water", "food", "debt", "military", "geography"]
+        layers = ["rrfi", "water", "food", "debt", "military", "geography", "ruin", "optionality", "confidence"]
         written = 0
         for layer_id in layers:
             for snapshot in build_world_snapshots(

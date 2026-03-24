@@ -72,11 +72,22 @@ class RRFIResult(BaseModel):
     explanation_graph: dict[str, Any]
 
 
+class FragilityProfile(BaseModel):
+    fragility_score: float
+    ruin_exposure: float
+    optionality_score: float
+    stress_gradient: float
+    systemic_risk: float
+    confidence_discount: float
+    heuristic_summary: str
+
+
 class CountrySummary(BaseModel):
     iso3: str
     name: str
     date: date
     rrfi: RRFIResult
+    fragility_profile: FragilityProfile
     pillar_scores: list[PillarScore]
     top_drivers: list[str]
     warnings: list[str]

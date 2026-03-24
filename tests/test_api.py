@@ -27,6 +27,7 @@ def test_hud_serves_html():
     assert "Dimentria" in response.text
     assert "Fragility workstation" in response.text
     assert "World Pulse" in response.text
+    assert "Consequence Rail" in response.text
 
 
 def test_world_rrfi_endpoint_returns_countries_and_metadata():
@@ -185,7 +186,7 @@ def test_snapshot_run_endpoint_writes_records():
 
 
 def test_world_layer_view_baseline_and_scenario():
-    baseline = client.get("/v1/world/layer-view?layer_id=rrfi&mode=baseline")
+    baseline = client.get("/v1/world/layer-view?layer_id=ruin&mode=baseline")
     assert baseline.status_code == 200
     assert baseline.json()["feature_collection"]["type"] == "FeatureCollection"
     first = baseline.json()["feature_collection"]["features"][0]["properties"]
@@ -193,7 +194,7 @@ def test_world_layer_view_baseline_and_scenario():
     assert "confidence" in first
 
     scenario = client.get(
-        "/v1/world/layer-view?layer_id=rrfi&mode=scenario&dalio_stage=6&shock_severity=0.7"
+        "/v1/world/layer-view?layer_id=optionality&mode=scenario&dalio_stage=6&shock_severity=0.7"
     )
     assert scenario.status_code == 200
     first = scenario.json()["feature_collection"]["features"][0]["properties"]

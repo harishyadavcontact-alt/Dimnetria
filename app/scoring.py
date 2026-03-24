@@ -23,6 +23,7 @@ from app.models import (
     CountrySummary,
     DailyBrief,
     DailyBriefEntry,
+    FragilityProfile,
     LawMultiplier,
     MetricSnapshot,
     PillarScore,
@@ -60,6 +61,11 @@ def normalize_metric(value: float, min_v: float = 0.0, max_v: float = 100.0) -> 
     if max_v == min_v:
         return 50.0
     return clamp(((value - min_v) / (max_v - min_v)) * 100.0)
+
+
+def _weighted_average(values: dict[str, float], weights: dict[str, float]) -> float:
+    total_weight = sum(weights.values()) or 1.0
+    return sum(values[key] * weights[key] for key in weights) / total_weight
 
 
 def _validate_inputs(
@@ -107,6 +113,105 @@ def build_provenance(index: dict[str, MetricSnapshot]) -> ScoreProvenance:
         source_count=len({snapshot.source for snapshot in snapshots}),
         staleness_days=max(snapshot.staleness_days for snapshot in snapshots),
         metric_snapshots=sorted(snapshots, key=lambda snapshot: snapshot.metric_id),
+    )
+
+
+def build_fragility_profile(
+    iso3: str,
+    *,
+    metrics: dict[str, float],
+    pillars: list[PillarScore],
+    provenance: ScoreProvenance,
+    solar_storm_severity: float,
+    chokepoint_closure: float,
+) -> FragilityProfile:
+    pillar_index = {pillar.pillar_id: pillar.score_0_100 for pillar in pillars}
+    structural_weakness = 100 - _weighted_average(
+        {
+            "water": pillar_index["water"],
+            "food": pillar_index["food"],
+            "finance": pillar_index["finance"],
+            "geography": pillar_index["geography"],
+            "physics": pillar_index["physics"],
+            "culture": pillar_index["culture"],
+        },
+        {
+            "water": 0.2,
+            "food": 0.2,
+            "finance": 0.2,
+            "geography": 0.15,
+            "physics": 0.15,
+            "culture": 0.1,
+        },
+    )
+    fragility_score = clamp(structural_weakness)
+
+    ruin_components = {
+        "food": 100 - metrics["food_self_reliance"],
+        "water": 100 - metrics["water_security"],
+        "imports": metrics["chokepoint_import_dependence"],
+        "grid": metrics["physics_grid_dependency"],
+        "debt": metrics["debt_burden"],
+    }
+    ruin_exposure = clamp(
+        _weighted_average(
+            ruin_components,
+            {"food": 0.22, "water": 0.2, "imports": 0.24, "grid": 0.14, "debt": 0.2},
+        )
+    )
+    shock_severity = max(solar_storm_severity, chokepoint_closure)
+    ruin_exposure = clamp(ruin_exposure + (chokepoint_closure * 18) + (solar_storm_severity * 12) + (shock_severity * 8))
+
+    optionality_components = {
+        "food": metrics["food_self_reliance"],
+        "military": metrics["military_autonomy"],
+        "culture": metrics["social_cohesion"],
+        "water": metrics["water_security"],
+        "finance": 100 - metrics["debt_burden"],
+    }
+    optionality_score = clamp(
+        _weighted_average(
+            optionality_components,
+            {"food": 0.25, "military": 0.18, "culture": 0.18, "water": 0.19, "finance": 0.2},
+        )
+    )
+
+    stress_gradient = clamp(
+        (
+            metrics["chokepoint_import_dependence"] * 0.32
+            + metrics["physics_grid_dependency"] * 0.24
+            + (100 - metrics["water_security"]) * 0.22
+            + (100 - metrics["health_resilience"]) * 0.1
+            + (100 - metrics["social_cohesion"]) * 0.12
+        )
+    )
+    systemic_risk = clamp(
+        (
+            metrics["geography_exposure"] * 0.35
+            + metrics["chokepoint_import_dependence"] * 0.3
+            + metrics["physics_grid_dependency"] * 0.2
+            + metrics["debt_burden"] * 0.15
+        )
+    )
+    confidence_discount = round((1 - provenance.confidence) * 100, 2)
+
+    if ruin_exposure >= 65:
+        heuristic_summary = "Ruin-sensitive profile: small shocks can become system breaks."
+    elif optionality_score >= 65 and fragility_score < 45:
+        heuristic_summary = "Buffer-rich profile: pressure exists, but fallback capacity remains."
+    elif systemic_risk >= 60:
+        heuristic_summary = "Network-sensitive profile: local damage can propagate through dependencies."
+    else:
+        heuristic_summary = "Mixed profile: monitor acceleration, not just current level."
+
+    return FragilityProfile(
+        fragility_score=round(fragility_score, 2),
+        ruin_exposure=round(ruin_exposure, 2),
+        optionality_score=round(optionality_score, 2),
+        stress_gradient=round(stress_gradient, 2),
+        systemic_risk=round(systemic_risk, 2),
+        confidence_discount=confidence_discount,
+        heuristic_summary=heuristic_summary,
     )
 
 
@@ -235,6 +340,8 @@ def compute_wartime_multiplier(iso3: str, chokepoint_closure: float = 0.0) -> tu
 
 def rrfi_for_country(iso3: str, *, solar_storm_severity: float = 0.0, chokepoint_closure: float = 0.0) -> CountrySummary:
     pillars, provenance, warnings = compute_pillars(iso3)
+    metric_index, _ = _metric_index(iso3)
+    metrics = _metric_values(metric_index)
     base_rrfi = sum(PILLAR_WEIGHTS[pillar.pillar_id] * pillar.score_0_100 for pillar in pillars)
     multipliers = compute_law_multipliers(iso3, solar_storm_severity=solar_storm_severity)
     law_product = 1.0
@@ -265,6 +372,14 @@ def rrfi_for_country(iso3: str, *, solar_storm_severity: float = 0.0, chokepoint
         },
         "drivers": top_drivers,
     }
+    fragility_profile = build_fragility_profile(
+        iso3,
+        metrics=metrics,
+        pillars=pillars,
+        provenance=provenance,
+        solar_storm_severity=solar_storm_severity,
+        chokepoint_closure=chokepoint_closure,
+    )
 
     return CountrySummary(
         iso3=iso3,
@@ -278,6 +393,7 @@ def rrfi_for_country(iso3: str, *, solar_storm_severity: float = 0.0, chokepoint
             final_score=round(final_rrfi, 2),
             explanation_graph=explanation_graph,
         ),
+        fragility_profile=fragility_profile,
         pillar_scores=pillars,
         top_drivers=top_drivers,
         warnings=warnings,
@@ -322,6 +438,12 @@ def _layer_value(
             metric_index["geography_exposure"].value
             + (100 - metric_index["chokepoint_import_dependence"].value)
         ) / 2 - choke_risk
+    if layer_id == "ruin":
+        return summary.fragility_profile.ruin_exposure
+    if layer_id == "optionality":
+        return summary.fragility_profile.optionality_score
+    if layer_id == "confidence":
+        return summary.provenance.confidence * 100
     if layer_id == "ecc_bull":
         return ECC_TOPIC_DATA[iso3]["ecc_bull_intensity"] * 100
     if layer_id == "ecc_bear":
@@ -391,6 +513,12 @@ def _scenario_layer_adjustment(
         return clamp(base_value - (shock_severity * 5))
     if layer_id == "geography":
         return clamp(base_value - (chokepoint_closure * 25) - (shock_severity * 4))
+    if layer_id == "ruin":
+        return clamp(base_value + (shock_severity * 18) + (chokepoint_closure * 14) + (solar_storm_severity * 10))
+    if layer_id == "optionality":
+        return clamp(base_value - (shock_severity * 12) - (chokepoint_closure * 10))
+    if layer_id == "confidence":
+        return clamp(base_value - (shock_severity * 5) - (solar_storm_severity * 4))
     if layer_id == "ecc_bull":
         return clamp(base_value - (shock_severity * 20))
     if layer_id == "ecc_bear":
@@ -561,7 +689,7 @@ def build_world_snapshots(
 
 
 def build_seed_snapshot_series(days: int = 8, layer_ids: list[str] | None = None) -> list[ScoreSnapshot]:
-    layers = layer_ids or ["rrfi", "water", "food", "debt", "military", "geography"]
+    layers = layer_ids or ["rrfi", "water", "food", "debt", "military", "geography", "ruin", "optionality", "confidence"]
     all_rows: list[ScoreSnapshot] = []
     for days_ago in range(days - 1, -1, -1):
         snapshot_date = BASE_DATE - timedelta(days=days_ago)
